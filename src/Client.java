@@ -52,7 +52,7 @@ public class Client {
 
         private InputStream inputStream;
         private OutputStream outputStream;
-        public static final int FILE_TRANSFER_BUFFER = 1024 * 8;
+        public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
 
 
         public FileServerThread(Socket socket) throws IOException {
@@ -74,6 +74,11 @@ public class Client {
             try (BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(dowloadFilePath));
                 BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(dowloadFilePath))
             ) {
+                byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
+
+                while (fileReader.read(packet) != -1) {
+                    fileWriter.write(packet);
+                }
 
             } catch (IOException e) {
                 e.printStackTrace();
