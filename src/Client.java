@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
 
 public class Client {
     private ServerSocket server;
@@ -31,17 +32,30 @@ public class Client {
     }
 
     class FileServerThread extends Thread {
-        private Socket client;
+        private Socket socket;
 
-        public FileServerThread(Socket client) {
-            this.client = client;
+        public FileServerThread(Socket socket) {
+            this.socket = socket;
         }
 
         @Override
         public void run() {
             super.run();
+        }        
+    }
+
+    /*
+    *  Intended to act as a thread which received the file from the server, its main purpose is to allows 
+    *  donwloading files from multiple servers concurrently.
+    */
+
+    class FileClientThread extends Thread {
+        private Socket socket;
+
+        public FileClientThread (String host, int port) throws UnknownHostException, IOException {
+            this.socket = new Socket(host, port);
         }
-        
+
     }
 
     public void runFilesShareServer() throws IOException {
