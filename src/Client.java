@@ -122,6 +122,7 @@ public class Client {
             creatFileIfNotExists(file);
             
             System.out.println("-- BEGINNING TRANSFER");
+            Long bytesTransfered = 0L;
             try (                
                 BufferedInputStream fileReader = new BufferedInputStream(inputStream);
                 BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file))
@@ -130,7 +131,9 @@ public class Client {
 
                 while (fileReader.read(data) != -1) {
                     fileWriter.write(data);
-                }
+                    bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
+                    System.out.println("+ BYTES TRANSFERED: " + bytesTransfered);
+                } 
                 
 
                 System.out.println("-- SUCCESSFULLY RECEIVED THE FILE FROM THE SERVER");
