@@ -31,6 +31,10 @@ public class Client {
         dirs.mkdirs();
     }
 
+    /*
+    * The class aims to enable multiple clients downloading from the same server concurrently on which
+    * each thread is going to be responsible to talk to a client "privately"
+    */
     class FileServerThread extends Thread {
         private Socket socket;
 
@@ -45,10 +49,9 @@ public class Client {
     }
 
     /*
-    *  Intended to act as a thread which received the file from the server, its main purpose is to allows 
+    *  Intended to act as a thread which receives a single file per thread from the server, so its main purpose is to allows 
     *  donwloading files from multiple servers concurrently.
     */
-
     class FileClientThread extends Thread {
         private Socket socket;
 
