@@ -2,36 +2,31 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ServerSocket;
 
 public class Client {
+    private ServerSocket server;
+    private String clientName;
+    private static final String BASE_CLIENT_FOLDER_PATH = "/src/client/resource/";
+    
 
+    public Client(ServerSocket server, int port, String clientName) throws IOException {
+        this.server = new ServerSocket(port);
+        this.clientName = clientName;
+        createClientFolder();
+    }
+
+    private void createClientFolder() {
+        String clientFolderPath = BASE_CLIENT_FOLDER_PATH + clientName;
+        File dirs = new File(clientFolderPath);
+        dirs.mkdirs();
+    }
 
     public static void main(String[] args) throws IOException {
-        String readingPath = "src/client/c1/video-test.mp4";
-        String writingPathDirs = "src/client/c2/";
-        File dirs = new File(writingPathDirs);
-        dirs.mkdirs();
-        
-        String writingPathFile = writingPathDirs + "video-copied.mp4";
-        File file = new File(writingPathFile);
-        file.createNewFile();
 
-        int bufferSize = 8 * 1024;
-        try ( InputStream reader = new BufferedInputStream(new FileInputStream(readingPath), bufferSize);
-            OutputStream writer = new BufferedOutputStream(new FileOutputStream(file, true))
-        ) {
-            byte[] data = new byte[bufferSize];
-            
-            while (reader.read(data, 0, data.length) != -1) {
-                writer.write(data);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }        
     }
 }
