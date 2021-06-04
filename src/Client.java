@@ -24,6 +24,7 @@ public class Client {
     private static final String BASE_CLIENT_FOLDER_PATH = "src/client/resource/";
     private String clientResourcesFilePath;
     private List<String> filesAvailable;
+    public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
     
 
     public Client(int port, String clientName) throws IOException {
@@ -52,7 +53,7 @@ public class Client {
 
         private InputStream inputStream;
         private OutputStream outputStream;
-        public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
+        
 
 
         public FileServerThread(Socket socket) throws IOException {
@@ -64,12 +65,14 @@ public class Client {
         @Override
         public void run() {
             System.out.println("-- SENDING THE LIST OF CLIENTS AVAILABLE TO THE CLIENT OF PORT: " + this.socket.getPort());
-            PrintStream messageWriter = new PrintStream(new BufferedOutputStream(outputStream));
-            messageWriter.println(filesAvailable);
-            messageWriter.flush();
+            //PrintStream messageWriter = new PrintStream(new BufferedOutputStream(outputStream));
+            //messageWriter.println(filesAvailable);
+            //messageWriter.flush();
 
             String dowloadFilePath = BASE_CLIENT_FOLDER_PATH + "video-teste.mp4";
 
+
+            System.out.println("-- TRANSFERING FILE TO THE CLIENT");
 
             try (BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(dowloadFilePath));
                 BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(dowloadFilePath))
@@ -80,6 +83,7 @@ public class Client {
                     fileWriter.write(packet);
                 }
 
+                System.out.println("------ SUCCESSFULLY FINISHED TRANSFERING THE FILE");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -92,10 +96,51 @@ public class Client {
     */
     class FileClientThread extends Thread {
         private Socket socket;
+        private InputStream inputStream;
+        private OutputStream outputStream;
 
         public FileClientThread (String host, int port) throws UnknownHostException, IOException {
             this.socket = new Socket(host, port);
+            this.inputStream = socket.getInputStream();
+            this.outputStream = socket.getOutputStream();
         }
+
+        private void creatFileIfNotExists(File file) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void run() {
+            System.out.println("-- CONNECTED TO THE SERVER");
+            
+            String writingFilePath = BASE_CLIENT_FOLDER_PATH + "test-video-received.mp4";            
+            File file = new File(writingFilePath);
+            creatFileIfNotExists(file);
+            
+            System.out.println("-- BEGINNING TRANSFER");
+            try (                
+                BufferedInputStream fileReader = new BufferedInputStream(inputStream);
+                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file))
+            ){
+                byte[] data = new byte[FILE_TRANSFER_PACKET_SIZE];
+
+                while (fileReader.read(data) != -1) {
+                    fileWriter.write(data);
+                }
+                
+
+                System.out.println("-- SUCCESSFULLY RECEIVED THE FILE FROM THE SERVER");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        
 
     }
 
