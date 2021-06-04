@@ -15,17 +15,18 @@ public class Client {
     private ServerSocket server;
     private String clientName;
     private static final String BASE_CLIENT_FOLDER_PATH = "src/client/resource/";
+    private String clientResourcesFilePath;
     
 
     public Client(int port, String clientName) throws IOException {
         this.server = new ServerSocket(port);
         this.clientName = clientName;
+        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName;
         createClientFolderIfNotExists();
     }
 
     private void createClientFolderIfNotExists() {
-        String clientFolderPath = BASE_CLIENT_FOLDER_PATH + clientName.toLowerCase();
-        File dirs = new File(clientFolderPath);
+        File dirs = new File(clientResourcesFilePath);
         dirs.mkdirs();
     }
 
