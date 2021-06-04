@@ -3,32 +3,44 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Client {
     private ServerSocket server;
     private String clientName;
     private static final String BASE_CLIENT_FOLDER_PATH = "src/client/resource/";
     private String clientResourcesFilePath;
+    private List<String> filesAvailable;
     
 
     public Client(int port, String clientName) throws IOException {
         this.server = new ServerSocket(port);
         this.clientName = clientName;
         this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName;
-        createClientFolderIfNotExists();
+
+        File clientFile = new File(clientResourcesFilePath);
+
+        createClientFolderIfNotExists(clientFile);
+
+        this.filesAvailable = Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
     }
 
-    private void createClientFolderIfNotExists() {
-        File dirs = new File(clientResourcesFilePath);
-        dirs.mkdirs();
+    private void createClientFolderIfNotExists(File clientFile) {
+
+        clientFile.mkdirs();
     }
 
     /*
@@ -38,13 +50,34 @@ public class Client {
     class FileServerThread extends Thread {
         private Socket socket;
 
-        public FileServerThread(Socket socket) {
+        private InputStream inputStream;
+        private OutputStream outputStream;
+        public static final int FILE_TRANSFER_BUFFER = 1024 * 8;
+
+
+        public FileServerThread(Socket socket) throws IOException {
             this.socket = socket;
+            this.inputStream = socket.getInputStream();
+            this.outputStream = socket.getOutputStream();
         }
 
         @Override
         public void run() {
-            super.run();
+            System.out.println("-- SENDING THE LIST OF CLIENTS AVAILABLE TO THE CLIENT OF PORT: " + this.socket.getPort());
+            PrintStream messageWriter = new PrintStream(new BufferedOutputStream(outputStream));
+            messageWriter.println(filesAvailable);
+            messageWriter.flush();
+
+            String dowloadFilePath = BASE_CLIENT_FOLDER_PATH + "video-teste.mp4";
+
+
+            try (BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(dowloadFilePath));
+                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(dowloadFilePath))
+            ) {
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }        
     }
 
