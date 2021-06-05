@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Client {
+
     private ServerSocket server;
     private String clientName;
     private static final String BASE_CLIENT_FOLDER_PATH = "src/client/resource/";
@@ -25,14 +26,6 @@ public class Client {
     
     private final Thread serverThread = new Thread(() -> runFilesShareServer());
     private final Thread clientConsumerThread = new Thread(() -> System.out.println("I'm client"));    
-
-    public void startServer() {
-        serverThread.start();
-    }
-
-    public void startClientConsumer() {
-        clientConsumerThread.start();
-    }    
 
     public Client(int port, String clientName) throws IOException {
         this.server = new ServerSocket(port);
@@ -47,8 +40,26 @@ public class Client {
     }
 
     private void createClientFolderIfNotExists(File clientFile) {
-
         clientFile.mkdirs();
+    }
+
+    public void startServer() {
+        serverThread.start();
+    }
+
+    public void startClientConsumer() {
+        clientConsumerThread.start();
+    }  
+
+    private void runFilesShareServer() {
+        while (true) {
+            try {
+                Socket client = server.accept();    
+                new FileServerThread(client).start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     /*
@@ -149,19 +160,6 @@ public class Client {
 
         }
     }
-
-    
-    private void runFilesShareServer() {
-        while (true) {
-            try {
-                Socket client = server.accept();    
-                new FileServerThread(client).start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-    
 
     public static void main(String[] args) throws IOException {
         System.out.println("Type the server/client's sharing port number:");
