@@ -1,3 +1,4 @@
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -19,18 +20,18 @@ public class Client {
 
     private ServerSocket server;
     private String clientName;
-    private static final String BASE_CLIENT_FOLDER_PATH = "src/client/resource/";
+    private static final String BASE_CLIENT_FOLDER_PATH = "client/resource/";
     private String clientResourcesFilePath;
     private List<String> filesAvailable;
     public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
     
     private final Thread serverThread = new Thread(() -> runFilesShareServer());
-    private final Thread clientConsumerThread = new Thread(() -> System.out.println("I'm client"));    
+    private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
 
     public Client(int port, String clientName) throws IOException {
         this.server = new ServerSocket(port);
         this.clientName = clientName;
-        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName;
+        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName + "/";
 
         File clientFile = new File(clientResourcesFilePath);
 
@@ -39,18 +40,19 @@ public class Client {
         this.filesAvailable = Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
     }
 
+    
     private void createClientFolderIfNotExists(File clientFile) {
         clientFile.mkdirs();
     }
-
+    
     public void startServer() {
         serverThread.start();
     }
-
+    
     public void startClientConsumer() {
         clientConsumerThread.start();
     }  
-
+    
     private void runFilesShareServer() {
         while (true) {
             try {
@@ -61,7 +63,21 @@ public class Client {
             }
         }
     }
+    
+    private void runFileClientDownloader() {
+        while (true) {
+            System.out.println("-- DO YOU WANT TO DOWNLOAD A FILE? (Y/N)");
+            System.out.println("-- TYPE IN THE SERVER'S PORT THAT YOU WANT TO DOWNLOAD THE FILE FROM");
+            BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
 
+            try {
+                int port = Integer.parseInt(inputReader.readLine());
+                new FileClientThread("localhost", port).start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
     * each thread is going to be responsible to talk to a client "privately"
@@ -69,14 +85,10 @@ public class Client {
     class FileServerThread extends Thread {
         private Socket socket;
 
-        private InputStream inputStream;
         private OutputStream outputStream;
-        
-
 
         public FileServerThread(Socket socket) throws IOException {
             this.socket = socket;
-            this.inputStream = socket.getInputStream();
             this.outputStream = socket.getOutputStream();
         }
 
@@ -87,24 +99,26 @@ public class Client {
             //messageWriter.println(filesAvailable);
             //messageWriter.flush();
 
-            String dowloadFilePath = BASE_CLIENT_FOLDER_PATH + "video-teste.mp4";
-
+            String dowloadFilePath = clientResourcesFilePath + "video-test.mp4";
 
             System.out.println("-- TRANSFERING FILE TO THE CLIENT");
 
-            try (BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(dowloadFilePath));
+            try (BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
                 BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(dowloadFilePath))
             ) {
                 byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
 
+                long bytesTransfered = 0L;
                 while (fileReader.read(packet) != -1) {
                     fileWriter.write(packet);
+                    bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
+                    System.out.println(bytesTransfered + " kb");
                 }
 
                 System.out.println("------ SUCCESSFULLY FINISHED TRANSFERING THE FILE");
             } catch (IOException e) {
                 e.printStackTrace();
-            }
+            } 
         }        
     }
 
@@ -115,12 +129,10 @@ public class Client {
     class FileClientThread extends Thread {
         private Socket socket;
         private InputStream inputStream;
-        private OutputStream outputStream;
 
         public FileClientThread (String host, int port) throws UnknownHostException, IOException {
             this.socket = new Socket(host, port);
             this.inputStream = socket.getInputStream();
-            this.outputStream = socket.getOutputStream();
         }
 
         private void creatFileIfNotExists(File file) {
@@ -135,7 +147,7 @@ public class Client {
         public void run() {
             System.out.println("-- CONNECTED TO THE SERVER");
             
-            String writingFilePath = BASE_CLIENT_FOLDER_PATH + "test-video-received.mp4";            
+            String writingFilePath = clientResourcesFilePath + "test-video-received.mp4";            
             File file = new File(writingFilePath);
             creatFileIfNotExists(file);
             
@@ -162,7 +174,7 @@ public class Client {
     }
 
     public static void main(String[] args) throws IOException {
-        System.out.println("Type the server/client's sharing port number:");
+        System.out.println("Type the server/client's LISTENING port number:");
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         int port = Integer.parseInt(reader.readLine());
         System.out.println("Type the server/client's name:");
