@@ -3,14 +3,11 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -26,6 +23,16 @@ public class Client {
     private List<String> filesAvailable;
     public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
     
+    private final Thread serverThread = new Thread(() -> runFilesShareServer());
+    private final Thread clientConsumerThread = new Thread(() -> System.out.println("I'm client"));    
+
+    public void startServer() {
+        serverThread.start();
+    }
+
+    public void startClientConsumer() {
+        clientConsumerThread.start();
+    }    
 
     public Client(int port, String clientName) throws IOException {
         this.server = new ServerSocket(port);
@@ -135,33 +142,36 @@ public class Client {
                     System.out.println("+ BYTES TRANSFERED: " + bytesTransfered);
                 } 
                 
-
                 System.out.println("-- SUCCESSFULLY RECEIVED THE FILE FROM THE SERVER");
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
         }
-
-        
-
     }
 
-    public void runFilesShareServer() throws IOException {
+    
+    private void runFilesShareServer() {
         while (true) {
-            Socket client = server.accept();    
-            new FileServerThread(client).start();
+            try {
+                Socket client = server.accept();    
+                new FileServerThread(client).start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
+    
 
     public static void main(String[] args) throws IOException {
-        System.out.println("Type the client's sharing port number:");
+        System.out.println("Type the server/client's sharing port number:");
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         int port = Integer.parseInt(reader.readLine());
-        System.out.println("Type the client's name:");
+        System.out.println("Type the server/client's name:");
         String clientName = reader.readLine();
 
         Client client = new Client(port, clientName);
-        client.runFilesShareServer();
+        client.startServer();
+        client.startClientConsumer();;
     }
 }
