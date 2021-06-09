@@ -16,7 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class Client {
+public class Peer {
 
     private ServerSocket server;
     private String clientName;
@@ -28,7 +28,7 @@ public class Client {
     private final Thread serverThread = new Thread(() -> runFilesShareServer());
     private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
 
-    public Client(int port, String clientName) throws IOException {
+    public Peer(int port, String clientName) throws IOException {
         this.server = new ServerSocket(port);
         this.clientName = clientName;
         this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName + "/";
@@ -78,13 +78,13 @@ public class Client {
             }
         }
     }
+    
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
     * each thread is going to be responsible to talk to a client "privately"
     */
     class FileServerThread extends Thread {
         private Socket socket;
-
         private OutputStream outputStream;
 
         public FileServerThread(Socket socket) throws IOException {
@@ -180,7 +180,7 @@ public class Client {
         System.out.println("Type the server/client's name:");
         String clientName = reader.readLine();
 
-        Client client = new Client(port, clientName);
+        Peer client = new Peer(port, clientName);
         client.startServer();
         client.startClientConsumer();;
     }
