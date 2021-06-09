@@ -8,9 +8,8 @@ import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.ServerSocket;
 
-public class Servidor {
+public class Servidor implements AutoCloseable {
 
     private final DatagramSocket socketReceptor;
     private static final int PORTA_SOCKET_RECEPTOR = 10098;
@@ -19,7 +18,7 @@ public class Servidor {
         this.socketReceptor = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
     }
 
-    public void iniciarServidor() throws IOException, ClassNotFoundException {
+    public void ligarServidor() throws IOException, ClassNotFoundException {
         while (true) {
             byte[] receivedBytes = new byte[8 * 1024];
             DatagramPacket packet = new DatagramPacket(receivedBytes, receivedBytes.length);
@@ -28,41 +27,10 @@ public class Servidor {
         }
     }
 
-    public void tratarRequisicao(Mensagem mensagem, DatagramPacket receivedPacket) {
-        String requisicao = mensagem.getTitulo();
-        InetAddress clienteEndereco = receivedPacket.getAddress();
-
-        int clientePort = receivedPacket.getPort();
-        Mensagem mensagemParaCliente = new Mensagem("JOIN_OK");
-
-        switch (requisicao) {
-            case "JOIN":
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                try {
-                    ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
-                    objectOutputStream.writeObject(mensagemParaCliente);
-                    objectOutputStream.flush();
-
-                    byte[] byteMessage = byteArrayOutputStream.toByteArray();
-
-                    DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
-                    DatagramSocket socket = new DatagramSocket();
-                    socket.send(packet);
-                    socket.close();
-                    System.out.println("RESPOSTA ENVIADA AO CLIENTE");
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-
-                break;
-
-            default:
-                System.err.println("NOT AVAILABLE");
-        }
-
+    @Override
+    public void close() throws Exception {
+        socketReceptor.close();        
     }
-
 
     class RequisicaoClienteThread extends Thread {
         private DatagramPacket receivedPacket;
@@ -91,22 +59,50 @@ public class Servidor {
             return null;
         }
 
-        
+        public void tratarRequisicao(Mensagem mensagem, DatagramPacket receivedPacket) {
+            String requisicao = mensagem.getTitulo();
+            InetAddress clienteEndereco = receivedPacket.getAddress();
+    
+            int clientePort = receivedPacket.getPort();
+            Mensagem mensagemParaCliente = new Mensagem("JOIN_OK");
+    
+            switch (requisicao) {
+                case "JOIN":
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    try {
+                        ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
+                        objectOutputStream.writeObject(mensagemParaCliente);
+                        objectOutputStream.flush();
+    
+                        byte[] byteMessage = byteArrayOutputStream.toByteArray();
+    
+                        DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
+
+                        socketReceptor.send(packet);
+
+                        System.out.println("RESPOSTA ENVIADA AO CLIENTE");
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+    
+    
+                    break;
+    
+                default:
+                    System.err.println("NOT AVAILABLE");
+            }
+        }       
     }
 
 
     public static void main(String[] args) {
-        System.out.println("AA");
-        try {
+        try (Servidor servidor = new Servidor()){            
             System.out.println("INICIALIZANDO SERVIDOR");
-            Servidor servidor = new Servidor();
-            servidor.iniciarServidor();
-        } catch (IOException e) {
+            servidor.ligarServidor();
+        } catch (Exception e) {
             e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-
+        } 
     }
+
+
 }
