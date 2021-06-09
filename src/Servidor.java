@@ -60,36 +60,40 @@ public class Servidor implements AutoCloseable {
         }
 
         public void tratarRequisicao(Mensagem mensagem, DatagramPacket receivedPacket) {
-            String requisicao = mensagem.getTitulo();
-            InetAddress clienteEndereco = receivedPacket.getAddress();
-    
-            int clientePort = receivedPacket.getPort();
-            Mensagem mensagemParaCliente = new Mensagem("JOIN_OK");
-    
+            String requisicao = mensagem.getTitulo();   
             switch (requisicao) {
-                case "JOIN":
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                    try {
-                        ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
-                        objectOutputStream.writeObject(mensagemParaCliente);
-                        objectOutputStream.flush();
-    
-                        byte[] byteMessage = byteArrayOutputStream.toByteArray();
-    
-                        DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
-
-                        socketReceptor.send(packet);
-
-                        System.out.println("RESPOSTA ENVIADA AO CLIENTE");
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-    
-    
+                case "JOIN":    
                     break;
-    
+                case "SEARCH":
+                    break;
+                case "LEAVE":
+                    break;
+                case "UPDATE":
+                    break;
+                case "ALIVE_OK":
+                    break;    
                 default:
                     System.err.println("NOT AVAILABLE");
+            }
+        }
+
+        private void enviarMensagemAoCliente(Mensagem mensagemParaCliente) {
+            InetAddress clienteEndereco = receivedPacket.getAddress();    
+            int clientePort = receivedPacket.getPort();
+
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            try {
+                ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
+                objectOutputStream.writeObject(mensagemParaCliente);
+                objectOutputStream.flush();
+   
+                byte[] byteMessage = byteArrayOutputStream.toByteArray();
+   
+                DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
+
+                socketReceptor.send(packet);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }       
     }
