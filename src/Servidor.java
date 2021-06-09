@@ -1,9 +1,13 @@
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 
 public class Servidor {
@@ -21,28 +25,60 @@ public class Servidor {
             DatagramPacket packet = new DatagramPacket(receivedBytes, receivedBytes.length);
             socketReceptor.receive(packet);
 
-
-
             ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(packet.getData());
             ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));
-            inputObject.close();
-         
+                        
             Mensagem mensagem = (Mensagem) inputObject.readObject();
             String requisicao = mensagem.getTitulo();
-
-            switch (requisicao) {
-                case "a":
-                    System.out.println("a");
-                
-            }
             
-            
+            System.out.println("MENSAGEM RECEBIDA:");
+            System.out.println(requisicao);
+            System.out.println(mensagem.getMensagens());
+            inputObject.close();
+            tratarRequisicao(mensagem, packet);
         }
+    }
+
+    public void tratarRequisicao(Mensagem mensagem, DatagramPacket receivedPacket) {
+        String requisicao = mensagem.getTitulo();
+        InetAddress clienteEndereco = receivedPacket.getAddress();
+
+        int clientePort = receivedPacket.getPort();
+        Mensagem mensagemParaCliente = new Mensagem("JOIN_OK");
+
+        switch (requisicao) {
+            case "JOIN":
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                try {
+                    ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
+                    objectOutputStream.writeObject(mensagemParaCliente);
+                    objectOutputStream.flush();
+
+                    byte[] byteMessage = byteArrayOutputStream.toByteArray();
+
+                    DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
+                    DatagramSocket socket = new DatagramSocket();
+                    socket.send(packet);
+                    socket.close();
+                    System.out.println("RESPOSTA ENVIADA AO CLIENTE");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+
+                break;
+
+            default:
+                System.err.println("NOT AVAILABLE");
+        }
+
     }
 
 
     public static void main(String[] args) {
+        System.out.println("AA");
         try {
+            System.out.println("INICIALIZANDO SERVIDOR");
             Servidor servidor = new Servidor();
             servidor.iniciarServidor();
         } catch (IOException e) {
