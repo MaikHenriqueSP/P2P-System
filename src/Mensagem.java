@@ -6,8 +6,8 @@ public class Mensagem implements Serializable {
 
     private static final long serialVersionUID = -3969352858203924755L;
 
-    private String titulo;
-    private Map<String, Object> mensagens;
+    private final String titulo;
+    private final Map<String, Object> mensagens;
     
     public Mensagem(String titulo) {
         this.titulo = titulo;
