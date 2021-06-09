@@ -24,18 +24,7 @@ public class Servidor {
             byte[] receivedBytes = new byte[8 * 1024];
             DatagramPacket packet = new DatagramPacket(receivedBytes, receivedBytes.length);
             socketReceptor.receive(packet);
-
-            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(packet.getData());
-            ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));
-                        
-            Mensagem mensagem = (Mensagem) inputObject.readObject();
-            String requisicao = mensagem.getTitulo();
-            
-            System.out.println("MENSAGEM RECEBIDA:");
-            System.out.println(requisicao);
-            System.out.println(mensagem.getMensagens());
-            inputObject.close();
-            tratarRequisicao(mensagem, packet);
+            new RequisicaoClienteThread(packet).start();
         }
     }
 
@@ -72,6 +61,37 @@ public class Servidor {
                 System.err.println("NOT AVAILABLE");
         }
 
+    }
+
+
+    class RequisicaoClienteThread extends Thread {
+        private DatagramPacket receivedPacket;
+
+        public RequisicaoClienteThread(DatagramPacket receivedPacket) {
+            this.receivedPacket = receivedPacket;
+        }
+
+        @Override
+        public void run() {
+            Mensagem mensageDoCliente = lerMensagemDoCliente();
+            System.out.println(mensageDoCliente);
+        }
+
+        private Mensagem lerMensagemDoCliente() {
+            byte[] receivedData = this.receivedPacket.getData();
+            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(receivedData);
+            
+            try {
+                ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));
+                return (Mensagem) inputObject.readObject();
+            } catch (ClassNotFoundException | IOException e) {
+                e.printStackTrace();
+            }
+            
+            return null;
+        }
+
+        
     }
 
 
