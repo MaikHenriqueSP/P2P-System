@@ -76,7 +76,7 @@ public class Servidor implements AutoCloseable {
             switch (requisicao) {
                 case "JOIN":
                     adicionarPeer(mensagem);
-                    break;
+]                   break;
                 case "SEARCH":
                     procurarArquivo(mensagem);                
                     break;
@@ -100,14 +100,15 @@ public class Servidor implements AutoCloseable {
         }
 
         private void procurarArquivo(Mensagem mensagem) {
+
         }
 
         
         private void adicionarPeer(Mensagem mensagem) {
             String peerIdentity = getIdentidadePeer(mensagem);
+            Set<String> videos = getVideosPeer(mensagem);
             
-            if ( getVideosPeer(mensagem) != null && peerIdentity != null ) {
-                Set<String> videos = getVideosPeer(mensagem);
+            if ( videos != null && peerIdentity != null ) {
                 mapPeerAddressToFiles.put(peerIdentity, videos);
                 mapearVideoParaPeer(peerIdentity, videos);
             }
