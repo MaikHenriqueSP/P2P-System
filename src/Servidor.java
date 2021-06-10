@@ -9,6 +9,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,10 +20,12 @@ public class Servidor implements AutoCloseable {
     private final DatagramSocket socketReceptor;
     private static final int PORTA_SOCKET_RECEPTOR = 10098;
     private final Map<String, Set<String>> mapPeerAddressToFiles;
+    private final Map<String, Set<String>> mapFilesToPeersAddress;
     
     public Servidor() throws IOException {
         this.socketReceptor = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
         this.mapPeerAddressToFiles = new HashMap<>();
+        this.mapFilesToPeersAddress = new HashMap<>();
     }
 
     public void ligarServidor() throws IOException, ClassNotFoundException {
@@ -106,7 +109,16 @@ public class Servidor implements AutoCloseable {
             if ( getVideosPeer(mensagem) != null && peerIdentity != null ) {
                 Set<String> videos = getVideosPeer(mensagem);
                 mapPeerAddressToFiles.put(peerIdentity, videos);
+                mapearVideoParaPeer(peerIdentity, videos);
             }
+        }
+
+        private void mapearVideoParaPeer(String peerIdentity, Set<String> videos) {
+            videos.parallelStream().forEach(video -> {
+                    Set<String> peers = mapFilesToPeersAddress.getOrDefault(video, new HashSet<>());
+                    peers.add(peerIdentity);
+                    mapFilesToPeersAddress.put(video, peers); 
+            });
         }
 
         private String getIdentidadePeer(Mensagem mensagem) {
