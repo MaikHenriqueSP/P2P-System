@@ -42,7 +42,8 @@ public class Servidor implements AutoCloseable {
         @Override
         public void run() {
             Mensagem mensageDoCliente = lerMensagemDoCliente();
-            System.out.println(mensageDoCliente);
+            tratarRequisicao(mensageDoCliente);
+            
         }
 
         private Mensagem lerMensagemDoCliente() {
@@ -59,22 +60,39 @@ public class Servidor implements AutoCloseable {
             return null;
         }
 
-        public void tratarRequisicao(Mensagem mensagem, DatagramPacket receivedPacket) {
+        public void tratarRequisicao(Mensagem mensagem) {
             String requisicao = mensagem.getTitulo();   
+            
             switch (requisicao) {
-                case "JOIN":    
+                case "JOIN":
+                    adicionarPeer(mensagem);
                     break;
                 case "SEARCH":
+                    procurarArquivo(mensagem);                
                     break;
                 case "LEAVE":
+                    removerPeer();
                     break;
                 case "UPDATE":
+                    atualizarPeer();
                     break;
-                case "ALIVE_OK":
+                case "ALIVE_OK":                    
                     break;    
                 default:
                     System.err.println("NOT AVAILABLE");
             }
+        }
+
+        private void atualizarPeer() {
+        }
+
+        private void removerPeer() {
+        }
+
+        private void procurarArquivo(Mensagem mensagem) {
+        }
+
+        private void adicionarPeer(Mensagem mensagem) {
         }
 
         private void enviarMensagemAoCliente(Mensagem mensagemParaCliente) {
