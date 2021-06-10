@@ -72,11 +72,11 @@ public class Servidor implements AutoCloseable {
 
         public void tratarRequisicao(Mensagem mensagem) {
             String requisicao = mensagem.getTitulo();   
-            
+
             switch (requisicao) {
                 case "JOIN":
                     adicionarPeer(mensagem);
-]                   break;
+                    break;
                 case "SEARCH":
                     procurarArquivo(mensagem);                
                     break;
@@ -89,7 +89,7 @@ public class Servidor implements AutoCloseable {
                 case "ALIVE_OK":                    
                     break;    
                 default:
-                    System.err.println("NOT AVAILABLE");
+                    System.err.println("NOT AVAILABLE" + requisicao);
             }
         }
 
@@ -100,9 +100,18 @@ public class Servidor implements AutoCloseable {
         }
 
         private void procurarArquivo(Mensagem mensagem) {
+            Map<String, Object> mensagens = mensagem.getMensagens();
+                        
+            if (mensagens.get("arquivo_requistado") instanceof String ) {
+                String arquivoRequisitado = (String) mensagens.get("arquivo_requistado");
+                Set<String> peersPorArquivoRequisitado = mapFilesToPeersAddress.get(arquivoRequisitado);
+
+                Mensagem mensagemResposta = new Mensagem("SEARCH_OK");
+                mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
+                enviarMensagemAoCliente(mensagemResposta);
+            }
 
         }
-
         
         private void adicionarPeer(Mensagem mensagem) {
             String peerIdentity = getIdentidadePeer(mensagem);
@@ -111,6 +120,9 @@ public class Servidor implements AutoCloseable {
             if ( videos != null && peerIdentity != null ) {
                 mapPeerAddressToFiles.put(peerIdentity, videos);
                 mapearVideoParaPeer(peerIdentity, videos);
+
+                Mensagem mensagemResposta = new Mensagem("JOIN_OK");
+                enviarMensagemAoCliente(mensagemResposta);
             }
         }
 
@@ -154,7 +166,7 @@ public class Servidor implements AutoCloseable {
                 ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
                 objectOutputStream.writeObject(mensagemParaCliente);
                 objectOutputStream.flush();
-   
+                   
                 byte[] byteMessage = byteArrayOutputStream.toByteArray();
    
                 DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
@@ -165,7 +177,6 @@ public class Servidor implements AutoCloseable {
             }
         }       
     }
-
 
     public static void main(String[] args) {
         try (Servidor servidor = new Servidor()){            
