@@ -26,4 +26,9 @@ public class Mensagem implements Serializable {
         return mensagens;
     }
 
+    @Override
+    public String toString() {
+        return "Mensagem [mensagens=" + mensagens + ", titulo=" + titulo + "]";
+    }
+
 }
