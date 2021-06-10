@@ -58,10 +58,11 @@ public class Servidor implements AutoCloseable {
 
         private Mensagem lerMensagemDoCliente() {
             byte[] receivedData = this.receivedPacket.getData();
-            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(receivedData);
             
-            try {
+            
+            try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(receivedData);
                 ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));
+            ) {                
                 return (Mensagem) inputObject.readObject();
             } catch (ClassNotFoundException | IOException e) {
                 e.printStackTrace();
@@ -161,9 +162,10 @@ public class Servidor implements AutoCloseable {
             InetAddress clienteEndereco = receivedPacket.getAddress();    
             int clientePort = receivedPacket.getPort();
 
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            try {
+            
+            try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                 ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
+            ) {                
                 objectOutputStream.writeObject(mensagemParaCliente);
                 objectOutputStream.flush();
                    
