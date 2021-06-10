@@ -8,14 +8,21 @@ import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class Servidor implements AutoCloseable {
 
     private final DatagramSocket socketReceptor;
     private static final int PORTA_SOCKET_RECEPTOR = 10098;
+    private final Map<String, Set<String>> mapPeerAddressToFiles;
     
     public Servidor() throws IOException {
         this.socketReceptor = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
+        this.mapPeerAddressToFiles = new HashMap<>();
     }
 
     public void ligarServidor() throws IOException, ClassNotFoundException {
@@ -92,7 +99,37 @@ public class Servidor implements AutoCloseable {
         private void procurarArquivo(Mensagem mensagem) {
         }
 
+        
         private void adicionarPeer(Mensagem mensagem) {
+            String peerIdentity = getIdentidadePeer(mensagem);
+            
+            if ( getVideosPeer(mensagem) != null && peerIdentity != null ) {
+                Set<String> videos = getVideosPeer(mensagem);
+                mapPeerAddressToFiles.put(peerIdentity, videos);
+            }
+        }
+
+        private String getIdentidadePeer(Mensagem mensagem) {
+            Map<String, Object> messagesBody = mensagem.getMensagens();
+            
+            if (messagesBody.containsKey("address") && messagesBody.containsKey("port")) {
+                String address = (String) messagesBody.get("address");
+                String port = (String) messagesBody.get("port");
+                return address + "_" + port;
+            }
+            return null;
+        }
+
+        private Set<String> getVideosPeer(Mensagem mensagem) {
+            Map<String, Object> mensagens = mensagem.getMensagens();
+
+            if ( mensagens.get("arquivos") instanceof List<?>) {
+                @SuppressWarnings("unchecked")
+                List<String> nomeArquivos = (List<String>) mensagens.get("arquivos");
+                Set<String> videos = nomeArquivos.parallelStream().filter(arquivo -> arquivo.endsWith(".mp4")).collect(Collectors.toSet());
+                return videos;
+            }
+            return null;
         }
 
         private void enviarMensagemAoCliente(Mensagem mensagemParaCliente) {
