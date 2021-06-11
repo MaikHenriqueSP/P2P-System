@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -94,6 +95,15 @@ public class Peer {
         }
         return null;
     }
+
+    public void enviarMensagem(OutputStream outputStream, Mensagem mensagem) {
+        try (ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(outputStream))) {
+            objectOutputStream.writeObject(mensagem);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
     
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
@@ -153,10 +163,12 @@ public class Peer {
     class FileClientThread extends Thread {
         private Socket socket;
         private InputStream inputStream;
+        private OutputStream outputStream;
 
         public FileClientThread (String host, int port) throws UnknownHostException, IOException {
             this.socket = new Socket(host, port);
             this.inputStream = socket.getInputStream();
+            this.outputStream = socket.getOutputStream();
         }
 
         private void creatFileIfNotExists(File file) {
@@ -169,7 +181,7 @@ public class Peer {
 
         @Override
         public void run() {
-            System.out.println("-- CONNECTED TO THE SERVER");
+            System.out.println("-- CONECTADO AO PEER NA PORTA:" + socket.getPort());
             
             String writingFilePath = clientResourcesFilePath + "test-video-received.mp4";            
             File file = new File(writingFilePath);
@@ -189,7 +201,7 @@ public class Peer {
                     System.out.println("+ BYTES TRANSFERED: " + bytesTransfered);
                 } 
                 
-                System.out.println("-- SUCCESSFULLY RECEIVED THE FILE FROM THE SERVER");
+                System.out.println("-- DOWNLOAD FINALIZADO COM SUCESSO");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -198,16 +210,16 @@ public class Peer {
     }
 
     public static void main(String[] args) throws IOException {
-        System.out.println("Type the server/client's LISTENING port number:");
+        System.out.println("Digite o número da porta em que serão RECEBIDAS requisições:");
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         
         int port = Integer.parseInt(reader.readLine());
         
-        System.out.println("Type the server/client's IP address:");
+        System.out.println("Digite o endereço de IP em que serão RECEBIDAS requisições");
         String ipAddress = reader.readLine();
 
-        System.out.println("Type the client's name:");
+        System.out.println("Digite o nome do servidor:");
         String clientName = reader.readLine();
 
 

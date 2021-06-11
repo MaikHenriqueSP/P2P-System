@@ -19,6 +19,7 @@ public class Servidor implements AutoCloseable {
 
     private final DatagramSocket socketReceptor;
     private static final int PORTA_SOCKET_RECEPTOR = 10098;
+    private static final String ENDERECO_SERVIDOR = "localhost";
     private final Map<String, Set<String>> mapPeerAddressToFiles;
     private final Map<String, Set<String>> mapFilesToPeersAddress;
     
