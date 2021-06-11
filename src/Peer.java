@@ -88,23 +88,11 @@ public class Peer {
     }  
     
     private void runFilesShareServer() {
-        Mensagem mensagem = new Mensagem("JOIN");
-        mensagem.adicionarMensagem("arquivos", this.filesAvailable);
-        
-        try {
-            DatagramSocket dsocket;
-            dsocket = new DatagramSocket();
-            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, dsocket);
-            Mensagem joinOk = Mensagem.receberMensagemUDP(dsocket);
-            System.out.println("MSG:"  +joinOk);
-        } catch (SocketException e1) {
-            e1.printStackTrace();
-        }
-
-
         while (true) {
             try {
+                System.out.println("-- ESPERANDO POR REQUISIÇÕES DE ARQUIVOS");
                 Socket client = server.accept();    
+                System.out.println("REQUISIÇÃO DE CONEXÃO RECEBIDA");
                 new FileServerThread(client).start();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -117,7 +105,6 @@ public class Peer {
             new FileClientThread().start();
        // }
     }
-
     
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
@@ -179,15 +166,6 @@ public class Peer {
         private InputStream inputStream;
         private OutputStream outputStream;
         private DatagramSocket datagramSocket;
-
-        /*
-        public FileClientThread (String host, int port) throws UnknownHostException, IOException {
-            this.socket = new Socket(host, port);
-            this.inputStream = socket.getInputStream();
-            this.outputStream = socket.getOutputStream();
-            this.datagramSocket = new DatagramSocket();
-        }
-        */
 
         public void criarSocket(String host, int port) {
             try {
@@ -300,7 +278,8 @@ public class Peer {
         String clientName = reader.readLine();
 
 
-        Peer client = new Peer(port, ipAddress, clientName);
+        Peer peer = new Peer(port, ipAddress, clientName);
+        peer.startServer();
         // client.startServer();
         // client.startClientConsumer();;
     }
