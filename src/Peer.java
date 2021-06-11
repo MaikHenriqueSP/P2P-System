@@ -19,7 +19,11 @@ import java.util.stream.Collectors;
 public class Peer {
 
     private ServerSocket server;
+    private String ipAddress;
+
+    // @TODO: remove it and receive the path to the client's file folder
     private String clientName;
+
     private static final String BASE_CLIENT_FOLDER_PATH = "client/resource/";
     private String clientResourcesFilePath;
     private List<String> filesAvailable;
@@ -28,8 +32,9 @@ public class Peer {
     private final Thread serverThread = new Thread(() -> runFilesShareServer());
     private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
 
-    public Peer(int port, String clientName) throws IOException {
+    public Peer(int port, String ipAddress, String clientName) throws IOException {
         this.server = new ServerSocket(port);
+        this.ipAddress = ipAddress;
         this.clientName = clientName;
         this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName + "/";
 
@@ -67,7 +72,7 @@ public class Peer {
     private void runFileClientDownloader() {
         while (true) {
             System.out.println("-- DO YOU WANT TO DOWNLOAD A FILE? (Y/N)");
-            System.out.println("-- TYPE IN THE SERVER'S PORT THAT YOU WANT TO DOWNLOAD THE FILE FROM");
+            System.out.println("-- TYPE IN THE FILE NAME YOU'RE LOOKING FOOR");
             BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
 
             try {
@@ -175,12 +180,19 @@ public class Peer {
 
     public static void main(String[] args) throws IOException {
         System.out.println("Type the server/client's LISTENING port number:");
+
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        
         int port = Integer.parseInt(reader.readLine());
-        System.out.println("Type the server/client's name:");
+        
+        System.out.println("Type the server/client's IP address:");
+        String ipAddress = reader.readLine();
+
+        System.out.println("Type the client's name:");
         String clientName = reader.readLine();
 
-        Peer client = new Peer(port, clientName);
+
+        Peer client = new Peer(port, ipAddress, clientName);
         client.startServer();
         client.startClientConsumer();;
     }
