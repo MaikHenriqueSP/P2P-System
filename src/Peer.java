@@ -8,12 +8,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Peer {
@@ -83,6 +85,15 @@ public class Peer {
             }
         }
     }
+
+    public Mensagem receberMensagem(InputStream inputStream) {
+        try (ObjectInputStream objectInputStream = new ObjectInputStream(new BufferedInputStream(inputStream))) {
+            return (Mensagem) objectInputStream.readObject();                
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
     
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
@@ -91,39 +102,47 @@ public class Peer {
     class FileServerThread extends Thread {
         private Socket socket;
         private OutputStream outputStream;
+        private InputStream inputStream;
 
         public FileServerThread(Socket socket) throws IOException {
             this.socket = socket;
             this.outputStream = socket.getOutputStream();
+            this.inputStream = socket.getInputStream();
         }
 
         @Override
         public void run() {
-            System.out.println("-- SENDING THE LIST OF CLIENTS AVAILABLE TO THE CLIENT OF PORT: " + this.socket.getPort());
-            //PrintStream messageWriter = new PrintStream(new BufferedOutputStream(outputStream));
-            //messageWriter.println(filesAvailable);
-            //messageWriter.flush();
+            System.out.println("-- AGUARDANDO POR QUAL ARQUIVO SERÁ QUEREIDO POR: " + this.socket.getPort());
 
-            String dowloadFilePath = clientResourcesFilePath + "video-test.mp4";
+            Mensagem mensagem = receberMensagem(this.inputStream);
 
-            System.out.println("-- TRANSFERING FILE TO THE CLIENT");
+            Map<String, Object> mensagens = mensagem.getMensagens();
+            String titulo = mensagem.getTitulo();
+            
+            if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
+                String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
+                String caminhoArquivoRequisitado = clientResourcesFilePath + nomeArquivo;
+                transferirArquivo(caminhoArquivoRequisitado); 
+            }
+        }
 
+        private void transferirArquivo(String caminhoArquivoRequisitado) {
             try (BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
-                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(dowloadFilePath))
+                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado))
             ) {
                 byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
-
+   
                 long bytesTransfered = 0L;
                 while (fileReader.read(packet) != -1) {
                     fileWriter.write(packet);
                     bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
                     System.out.println(bytesTransfered + " kb");
                 }
-
-                System.out.println("------ SUCCESSFULLY FINISHED TRANSFERING THE FILE");
+   
+                System.out.println("------ TRANSFERÊNCIA DO ARQUIVO FINALIZADO COM SUCESSO");
             } catch (IOException e) {
                 e.printStackTrace();
-            } 
+            }
         }        
     }
 
