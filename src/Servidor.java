@@ -77,6 +77,7 @@ public class Servidor implements AutoCloseable {
 
             switch (requisicao) {
                 case "JOIN":
+                    System.out.println("REQUISIÇÃO JOIN RECEBIDA!");
                     adicionarPeer(mensagem);
                     break;
                 case "SEARCH":
@@ -118,6 +119,7 @@ public class Servidor implements AutoCloseable {
         private void adicionarPeer(Mensagem mensagem) {
             String peerIdentity = getIdentidadePeer(mensagem);
             Set<String> videos = getVideosPeer(mensagem);
+            System.out.println(videos);
             
             if ( videos != null && peerIdentity != null ) {
                 mapPeerAddressToFiles.put(peerIdentity, videos);
@@ -175,6 +177,7 @@ public class Servidor implements AutoCloseable {
                 DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
 
                 socketReceptor.send(packet);
+                System.out.println("MENSAGEM ENVIADA AO CLIENTE");
             } catch (IOException e) {
                 e.printStackTrace();
             }

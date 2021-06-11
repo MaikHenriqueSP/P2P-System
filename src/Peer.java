@@ -18,6 +18,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
@@ -43,14 +44,34 @@ public class Peer {
     public Peer(int port, String ipAddress, String clientName) throws IOException {
         this.server = new ServerSocket(port);
         this.ipAddress = ipAddress;
-        this.clientName = clientName;
-        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName + "/";
+        this.clientName = clientName.toLowerCase();
+        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + this.clientName + "/";
 
         File clientFile = new File(clientResourcesFilePath);
-
         createClientFolderIfNotExists(clientFile);
+        this.filesAvailable = getListaNomeArquivosDeVideo(clientFile);
+        joinServidor();
+    }
 
-        this.filesAvailable = Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
+
+    private void joinServidor() {
+        Mensagem mensagem = new Mensagem("JOIN");
+
+        mensagem.adicionarMensagem("arquivos", filesAvailable);
+        mensagem.adicionarMensagem("address", ipAddress);
+        mensagem.adicionarMensagem("port", String.valueOf(server.getLocalPort()));
+
+        try (DatagramSocket datagramSocket = new DatagramSocket()){
+            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
+            Mensagem respostaServidor = Mensagem.receberMensagemUDP(datagramSocket);
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private List<String> getListaNomeArquivosDeVideo(File clientFile) {
+        return Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
     }
 
     
@@ -67,6 +88,20 @@ public class Peer {
     }  
     
     private void runFilesShareServer() {
+        Mensagem mensagem = new Mensagem("JOIN");
+        mensagem.adicionarMensagem("arquivos", this.filesAvailable);
+        
+        try {
+            DatagramSocket dsocket;
+            dsocket = new DatagramSocket();
+            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, dsocket);
+            Mensagem joinOk = Mensagem.receberMensagemUDP(dsocket);
+            System.out.println("MSG:"  +joinOk);
+        } catch (SocketException e1) {
+            e1.printStackTrace();
+        }
+
+
         while (true) {
             try {
                 Socket client = server.accept();    
@@ -78,69 +113,11 @@ public class Peer {
     }
     
     private void runFileClientDownloader() {
-        while (true) {
-            System.out.println("-- DO YOU WANT TO DOWNLOAD A FILE? (Y/N)");
-            System.out.println("-- TYPE IN THE FILE NAME YOU'RE LOOKING FOOR");
-            BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
-
-            try {
-                int port = Integer.parseInt(inputReader.readLine());
-                new FileClientThread("localhost", port).start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        //while (true) {
+            new FileClientThread().start();
+       // }
     }
 
-    public Mensagem receberMensagem(InputStream inputStream) {
-        try (ObjectInputStream objectInputStream = new ObjectInputStream(new BufferedInputStream(inputStream))) {
-            return (Mensagem) objectInputStream.readObject();                
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
-    public void enviarMensagem(OutputStream outputStream, Mensagem mensagem) {
-        try (ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(outputStream))) {
-            objectOutputStream.writeObject(mensagem);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void enviarMensagemUDP(Mensagem mensagem, String endereco, int port, DatagramSocket datagramSocket) {
-        InetAddress hostEndereco;
-        try {
-            hostEndereco = InetAddress.getByName(endereco);
-            ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
-            ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteOutputStream));
-            
-            objectOutputStream.writeObject(mensagem);
-            objectOutputStream.flush();
-            byte[] messageInBytesArray = byteOutputStream.toByteArray();
-    
-            DatagramPacket packet = new DatagramPacket(messageInBytesArray, messageInBytesArray.length, hostEndereco, port);
-            datagramSocket.send(packet);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }        
-    }
-
-    public Mensagem receberMensagemUDP(DatagramSocket datagramSocket) {
-        byte[] receivedBytes = new byte[8 * 1024];
-        DatagramPacket spacket = new DatagramPacket(receivedBytes, receivedBytes.length);
-        
-        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(spacket.getData());
-            ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));) {            
-            datagramSocket.receive(spacket);
-            return (Mensagem) inputObject.readObject();
-        } catch (ClassNotFoundException | IOException e) {
-            e.printStackTrace();
-        }
-
-        return null;
-    }
     
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
@@ -161,7 +138,7 @@ public class Peer {
         public void run() {
             System.out.println("-- AGUARDANDO POR QUAL ARQUIVO SERÁ QUEREIDO POR: " + this.socket.getPort());
 
-            Mensagem mensagem = receberMensagem(this.inputStream);
+            Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
 
             Map<String, Object> mensagens = mensagem.getMensagens();
             String titulo = mensagem.getTitulo();
@@ -203,11 +180,24 @@ public class Peer {
         private OutputStream outputStream;
         private DatagramSocket datagramSocket;
 
+        /*
         public FileClientThread (String host, int port) throws UnknownHostException, IOException {
             this.socket = new Socket(host, port);
             this.inputStream = socket.getInputStream();
             this.outputStream = socket.getOutputStream();
             this.datagramSocket = new DatagramSocket();
+        }
+        */
+
+        public void criarSocket(String host, int port) {
+            try {
+                this.socket = new Socket(host, port);
+                this.inputStream = socket.getInputStream();
+                this.outputStream = socket.getOutputStream();
+                this.datagramSocket = new DatagramSocket();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         private void creatFileIfNotExists(File file) {
@@ -239,12 +229,12 @@ public class Peer {
             requisicaoPeers.adicionarMensagem("arquivo_requistado", nomArquivo);
             
             System.out.println("REQUISITANDO AO SERVIDOR A LISTA DE PEERS QUE POSSUEM O ARQUIVO:" + nomArquivo);
-            enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
+            Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
 
 
             //RECEBIMENTO DO SERVIDOR DA LISTA DE PEERS COM O ARQUIVO
             System.out.println("AGUARDANDO LISTA DE PEERS COM O ARQUIVO:");
-            Mensagem mensagemPeersComOArquivo = receberMensagemUDP(datagramSocket);
+            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(datagramSocket);
             Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
 
             String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
@@ -258,15 +248,23 @@ public class Peer {
 
             String peerEndereco = peerInfo[0];
             int peerPorta = Integer.parseInt(peerInfo[1]);
-            
 
+            //ESTABELECENDO CONEXÃO TCP COM O PEER
             System.out.println("-- CONECTADO AO PEER NA PORTA:" + socket.getPort());
+            //CRIANDO SOCKET
+            criarSocket(peerEndereco, peerPorta);
+
+            //INFORMANDO O ARQUIVO A SER BAIXADO
+            Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
+            arquivoRequerido.adicionarMensagem("arquivo_solicitado", nomArquivo);
+            Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
             
-            String writingFilePath = clientResourcesFilePath + "test-video-received.mp4";            
+            //PROCESSO DE DOWNLOAD
+            String writingFilePath = clientResourcesFilePath + nomArquivo;            
             File file = new File(writingFilePath);
             creatFileIfNotExists(file);
             
-            System.out.println("-- BEGINNING TRANSFER");
+            System.out.println("-- COMEÇANDO TRANSFERÊNCIA");
             Long bytesTransfered = 0L;
             try (                
                 BufferedInputStream fileReader = new BufferedInputStream(inputStream);
@@ -303,7 +301,7 @@ public class Peer {
 
 
         Peer client = new Peer(port, ipAddress, clientName);
-        client.startServer();
-        client.startClientConsumer();;
+        // client.startServer();
+        // client.startClientConsumer();;
     }
 }
