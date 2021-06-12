@@ -133,26 +133,18 @@ public class Peer {
         }
 
         private void transferirArquivo(String caminhoArquivoRequisitado) {
-            try {
-                BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
-                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));
-                
+            try (BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
+                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
                 byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
-   
-                long bytesTransfered = 0L;
                 while (fileReader.read(packet) != -1) {
                     fileWriter.write(packet);
-                    bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
-                    System.out.println(bytesTransfered + " kb");
-                }
-   
+                    fileWriter.flush();
+                }   
                 System.out.println("------ TRANSFERÊNCIA DO ARQUIVO FINALIZADO COM SUCESSO");
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }       
-        
-        
+        }
     }
 
     /*
@@ -189,21 +181,14 @@ public class Peer {
             String nomeArquivo = getArquivoNomeArquivoRequerido();
             Mensagem mensagemPeersComOArquivo = getPeersComArquivo(nomeArquivo);
             
-            Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
-            String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
-
-            String[] peerInfo = getDadosPeer(mensagensArquivosPeer, tituloRespostaPeersComOArquivo);
+            String[] peerInfo = getDadosPeer(mensagemPeersComOArquivo);
             String peerEndereco = peerInfo[0];
             int peerPorta = Integer.parseInt(peerInfo[1]);
 
-            //ESTABELECENDO CONEXÃO TCP COM O PEER
-            //CRIANDO SOCKET
-            System.out.println("CONECTANDO AO PEER:");
             estabelecerConexao(peerEndereco, peerPorta);
-            System.out.println("-- CONECTADO AO PEER NA PORTA:" + socket.getPort());
-
             combinarArquivoParaDownload(nomeArquivo);            
             downloadArquivo(nomeArquivo);
+            System.out.println("FIM DOWNLOAD");
         }
 
         private void combinarArquivoParaDownload(String nomArquivo) {
@@ -223,15 +208,16 @@ public class Peer {
             System.out.println("-- COMEÇANDO TRANSFERÊNCIA");
             Long bytesTransfered = 0L;
 
-            try {
-                BufferedInputStream fileReader = new BufferedInputStream(inputStream);
-                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file));
-                byte[] data = new byte[FILE_TRANSFER_PACKET_SIZE];
+            try (BufferedInputStream fileReader = new BufferedInputStream(inputStream);
+                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file));){
 
+                byte[] data = new byte[FILE_TRANSFER_PACKET_SIZE];
+                
                 while (fileReader.read(data) != -1) {
                     fileWriter.write(data);
+                    fileWriter.flush();
                     bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
-                    System.out.println("+ BYTES TRANSFERED: " + bytesTransfered);
+                    System.out.println("+ KBYTES RECEIVED: " + bytesTransfered);
                 } 
                 
                 System.out.println("-- DOWNLOAD FINALIZADO COM SUCESSO");
@@ -240,7 +226,10 @@ public class Peer {
             }
         }
 
-        private String[] getDadosPeer(Map<String, Object> mensagensArquivosPeer, String tituloRespostaPeersComOArquivo) {
+        private String[] getDadosPeer(Mensagem mensagemPeersComOArquivo) {
+            Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
+            String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
+
             String[] peerInfo = null;
             
             if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof Set<?>) {
