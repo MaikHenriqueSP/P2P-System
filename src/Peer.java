@@ -10,19 +10,16 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Peer {
@@ -53,7 +50,6 @@ public class Peer {
         joinServidor();
     }
 
-
     private void joinServidor() {
         Mensagem mensagem = new Mensagem("JOIN");
 
@@ -69,11 +65,9 @@ public class Peer {
         }
     }
 
-
     private List<String> getListaNomeArquivosDeVideo(File clientFile) {
         return Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
     }
-
     
     private void createClientFolderIfNotExists(File clientFile) {
         clientFile.mkdirs();
@@ -123,9 +117,10 @@ public class Peer {
 
         @Override
         public void run() {
-            System.out.println("-- AGUARDANDO POR QUAL ARQUIVO SERÁ QUEREIDO POR: " + this.socket.getPort());
+            System.out.println("-- AGUARDANDO POR QUAL ARQUIVO SERÁ REQUERIDO POR: " + this.socket.getPort());
 
             Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
+            System.out.println("ARQUIVO REQUERIDO:" + mensagem);
 
             Map<String, Object> mensagens = mensagem.getMensagens();
             String titulo = mensagem.getTitulo();
@@ -138,9 +133,10 @@ public class Peer {
         }
 
         private void transferirArquivo(String caminhoArquivoRequisitado) {
-            try (BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
-                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado))
-            ) {
+            try {
+                BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
+                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));
+                
                 byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
    
                 long bytesTransfered = 0L;
@@ -154,7 +150,9 @@ public class Peer {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }        
+        }       
+        
+        
     }
 
     /*
@@ -167,9 +165,9 @@ public class Peer {
         private OutputStream outputStream;
         private DatagramSocket datagramSocket;
 
-        public void criarSocket(String host, int port) {
+        public void estabelecerConexao(String host, int port) {
             try {
-                this.socket = new Socket(host, port);
+                this.socket = new Socket("localhost", port);
                 this.inputStream = socket.getInputStream();
                 this.outputStream = socket.getOutputStream();
                 this.datagramSocket = new DatagramSocket();
@@ -188,66 +186,46 @@ public class Peer {
 
         @Override
         public void run() {
-
-            //INPUT DO USUARIO SOBRE QUAL ARQUIVO QUER BAIXAR
-            System.out.println("Digite o nome do arquivo (com extensão) que desaja baixar:");
-            BufferedReader inputUsuario = new BufferedReader(new InputStreamReader(System.in));
-            String nomArquivo = "";
+            String nomeArquivo = getArquivoNomeArquivoRequerido();
+            Mensagem mensagemPeersComOArquivo = getPeersComArquivo(nomeArquivo);
             
-            try {
-                nomArquivo = inputUsuario.readLine();
-            } catch (IOException e1) {
-
-                e1.printStackTrace();
-            }
-
-
-            //ENVIO DA PERGUNTA AO SERVIDOR SOBRE QUAIS PEERS TEM O ARQUIVO
-            Mensagem requisicaoPeers = new Mensagem("SEARCH");
-            requisicaoPeers.adicionarMensagem("arquivo_requistado", nomArquivo);
-            
-            System.out.println("REQUISITANDO AO SERVIDOR A LISTA DE PEERS QUE POSSUEM O ARQUIVO:" + nomArquivo);
-            Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
-
-
-            //RECEBIMENTO DO SERVIDOR DA LISTA DE PEERS COM O ARQUIVO
-            System.out.println("AGUARDANDO LISTA DE PEERS COM O ARQUIVO:");
-            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(datagramSocket);
             Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
-
             String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
 
-            String[] peerInfo = null;
-            if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof List<?>) {
-                @SuppressWarnings("unchecked")
-                List<String> listaPeers = (List<String>) mensagensArquivosPeer.get("lista_peers");
-                peerInfo = listaPeers.get(0).split("_");
-            }
-
+            String[] peerInfo = getDadosPeer(mensagensArquivosPeer, tituloRespostaPeersComOArquivo);
             String peerEndereco = peerInfo[0];
             int peerPorta = Integer.parseInt(peerInfo[1]);
 
             //ESTABELECENDO CONEXÃO TCP COM O PEER
-            System.out.println("-- CONECTADO AO PEER NA PORTA:" + socket.getPort());
             //CRIANDO SOCKET
-            criarSocket(peerEndereco, peerPorta);
+            System.out.println("CONECTANDO AO PEER:");
+            estabelecerConexao(peerEndereco, peerPorta);
+            System.out.println("-- CONECTADO AO PEER NA PORTA:" + socket.getPort());
 
-            //INFORMANDO O ARQUIVO A SER BAIXADO
+            combinarArquivoParaDownload(nomeArquivo);            
+            downloadArquivo(nomeArquivo);
+        }
+
+        private void combinarArquivoParaDownload(String nomArquivo) {
+            System.out.println("HANDSHAKE - ARQUIVO DE TRANSFERENCIA");
             Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
             arquivoRequerido.adicionarMensagem("arquivo_solicitado", nomArquivo);
             Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
-            
-            //PROCESSO DE DOWNLOAD
+            System.out.println("MENSAGEM ENVIADA COM SUCESSO!");
+        }
+
+        private void downloadArquivo(String nomArquivo) {
             String writingFilePath = clientResourcesFilePath + nomArquivo;            
             File file = new File(writingFilePath);
-            creatFileIfNotExists(file);
-            
+
+            creatFileIfNotExists(file);            
+
             System.out.println("-- COMEÇANDO TRANSFERÊNCIA");
             Long bytesTransfered = 0L;
-            try (                
+
+            try {
                 BufferedInputStream fileReader = new BufferedInputStream(inputStream);
-                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file))
-            ){
+                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file));
                 byte[] data = new byte[FILE_TRANSFER_PACKET_SIZE];
 
                 while (fileReader.read(data) != -1) {
@@ -260,7 +238,54 @@ public class Peer {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
 
+        private String[] getDadosPeer(Map<String, Object> mensagensArquivosPeer, String tituloRespostaPeersComOArquivo) {
+            String[] peerInfo = null;
+            
+            if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof Set<?>) {
+                @SuppressWarnings("unchecked")
+                Set<String> listaPeers = (Set<String>) mensagensArquivosPeer.get("lista_peers");
+                peerInfo = listaPeers.stream().findFirst().get().split("_");
+            }
+            return peerInfo;
+        }
+
+        private Mensagem getPeersComArquivo(String nomArquivo) {
+            try {
+                this.datagramSocket = new DatagramSocket();
+            } catch (SocketException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            //ENVIO DA PERGUNTA AO SERVIDOR SOBRE QUAIS PEERS TEM O ARQUIVO
+            Mensagem requisicaoPeers = new Mensagem("SEARCH");
+            requisicaoPeers.adicionarMensagem("arquivo_requistado", nomArquivo);
+            
+            System.out.println("REQUISITANDO AO SERVIDOR A LISTA DE PEERS QUE POSSUEM O ARQUIVO:" + nomArquivo);
+            Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
+
+
+            //RECEBIMENTO DO SERVIDOR DA LISTA DE PEERS COM O ARQUIVO
+            System.out.println("AGUARDANDO LISTA DE PEERS COM O ARQUIVO:");
+            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(datagramSocket);
+            System.out.println("PEERS COM O ARQUIVO:" + mensagemPeersComOArquivo);
+            return mensagemPeersComOArquivo;
+        }
+
+        private String getArquivoNomeArquivoRequerido() {
+            //INPUT DO USUARIO SOBRE QUAL ARQUIVO QUER BAIXAR
+            System.out.println("Digite o nome do arquivo (com extensão) que desaja baixar:");
+            BufferedReader inputUsuario = new BufferedReader(new InputStreamReader(System.in));
+            String nomArquivo = "";
+            
+            try {
+                nomArquivo = inputUsuario.readLine();
+            } catch (IOException e1) {
+
+                e1.printStackTrace();
+            }
+            return nomArquivo;
         }
     }
 
@@ -281,6 +306,6 @@ public class Peer {
         Peer peer = new Peer(port, ipAddress, clientName);
         peer.startServer();
         // client.startServer();
-        // client.startClientConsumer();;
+        peer.startClientConsumer();;
     }
 }

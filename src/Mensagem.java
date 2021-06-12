@@ -40,8 +40,9 @@ public class Mensagem implements Serializable {
 
 
     public static Mensagem receberMensagemTCP(InputStream inputStream) {
-        try (ObjectInputStream objectInputStream = new ObjectInputStream(new BufferedInputStream(inputStream))) {
-            return (Mensagem) objectInputStream.readObject();                
+        try {
+            ObjectInputStream objectInputStream = new ObjectInputStream(new BufferedInputStream(inputStream));
+            return (Mensagem) objectInputStream.readObject();  
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -49,8 +50,10 @@ public class Mensagem implements Serializable {
     }
 
     public static void enviarMensagemTCP(OutputStream outputStream, Mensagem mensagem) {
-        try (ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(outputStream))) {
+        try {
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(outputStream));
             objectOutputStream.writeObject(mensagem);
+            objectOutputStream.flush();
         } catch (Exception e) {
             e.printStackTrace();
         }
