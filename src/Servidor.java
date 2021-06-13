@@ -86,7 +86,7 @@ public class Servidor implements AutoCloseable {
                     removerPeer();
                     break;
                 case "UPDATE":
-                    atualizarPeer();
+                    atualizarPeer(mensagem);
                     break;
                 case "ALIVE_OK":                    
                     break;    
@@ -95,7 +95,28 @@ public class Servidor implements AutoCloseable {
             }
         }
 
-        private void atualizarPeer() {
+        private void atualizarPeer(Mensagem mensagem) {
+            Map<String, Object> mensagens = mensagem.getMensagens();
+            String arquivo = (String) mensagens.get("arquivo");
+            String endereco = (String) mensagens.get("endereco");
+
+            adicionarMapeamentoPeerParaArquivos(arquivo, endereco);
+            adicionarMapeamentoArquivoParaPeers(arquivo, endereco);
+
+            Mensagem updateOk = new Mensagem("UPDATE_OK");
+            enviarMensagemAoCliente(updateOk);
+        }
+
+        private void adicionarMapeamentoPeerParaArquivos(String arquivo, String endereco) {
+            Set<String> arquivosPorPeer = mapPeerAddressToFiles.getOrDefault(endereco, new HashSet<>());
+            arquivosPorPeer.add(arquivo);
+            mapPeerAddressToFiles.put(endereco, arquivosPorPeer);
+        }
+
+        private void adicionarMapeamentoArquivoParaPeers(String arquivo, String endereco) {
+            Set<String> peersPorArquivo = mapFilesToPeersAddress.getOrDefault(arquivo, new HashSet<>());
+            peersPorArquivo.add(endereco);
+            mapFilesToPeersAddress.put(arquivo, peersPorArquivo);
         }
 
         private void removerPeer() {
@@ -135,11 +156,9 @@ public class Servidor implements AutoCloseable {
             }
         }
 
-        private void mapearVideoParaPeer(String peerIdentity, Set<String> videos) {
+        private void mapearVideoParaPeer(String endereco, Set<String> videos) {
             videos.parallelStream().forEach(video -> {
-                    Set<String> peers = mapFilesToPeersAddress.getOrDefault(video, new HashSet<>());
-                    peers.add(peerIdentity);
-                    mapFilesToPeersAddress.put(video, peers); 
+                    adicionarMapeamentoArquivoParaPeers(video, endereco);
             });
         }
 
