@@ -2,8 +2,7 @@
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -12,7 +11,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -38,6 +36,8 @@ public class Peer {
     private final Thread serverThread = new Thread(() -> runFilesShareServer());
     private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
 
+    private final BufferedReader userInputReader;
+
     public Peer(int port, String ipAddress, String clientName) throws IOException {
         this.server = new ServerSocket(port);
         this.ipAddress = ipAddress;
@@ -47,6 +47,9 @@ public class Peer {
         File clientFile = new File(clientResourcesFilePath);
         createClientFolderIfNotExists(clientFile);
         this.filesAvailable = getListaNomeArquivosDeVideo(clientFile);
+        
+        this.userInputReader = new BufferedReader(new InputStreamReader(System.in));
+
         joinServidor();
     }
 
@@ -93,13 +96,34 @@ public class Peer {
             }
         }
     }
-    
-    private void runFileClientDownloader() {
-        //while (true) {
-            new FileClientThread().start();
-       // }
+
+    private String getNomeArquivoAlvo() {
+        System.out.println("Digite o nome do arquivo (com extensão) que desaja baixar:");
+                        
+        try {
+            String nomeArquivo =  this.userInputReader.readLine();
+            
+            while (!nomeArquivo.endsWith(".mp4")) {
+                System.out.println("Somente são aceitos arquivos de extensão .mp4");
+                nomeArquivo = this.userInputReader.readLine();
+            }
+            
+            return nomeArquivo;
+        } catch (IOException e1) {
+            System.out.println("Ocorreu um erro durante a leitura, tente novamente!");
+            return null;
+        }        
     }
     
+    private void runFileClientDownloader() {
+        while (true) {
+            String arquivoAlvo = getNomeArquivoAlvo();
+            if (arquivoAlvo != null) {
+                new FileClientThread(arquivoAlvo).start();
+            }
+        }
+    }
+   
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
     * each thread is going to be responsible to talk to a client "privately"
@@ -156,6 +180,11 @@ public class Peer {
         private InputStream inputStream;
         private OutputStream outputStream;
         private DatagramSocket datagramSocket;
+        private String arquivoAlvo;
+
+        public FileClientThread(String arquivoAlvo) {
+            this.arquivoAlvo = arquivoAlvo;
+        }
 
         public void estabelecerConexao(String host, int port) {
             try {
@@ -178,16 +207,15 @@ public class Peer {
 
         @Override
         public void run() {
-            String nomeArquivo = getArquivoNomeArquivoRequerido();
-            Mensagem mensagemPeersComOArquivo = getPeersComArquivo(nomeArquivo);
+            Mensagem mensagemPeersComOArquivo = getPeersComArquivo(this.arquivoAlvo);
             
             String[] peerInfo = getDadosPeer(mensagemPeersComOArquivo);
             String peerEndereco = peerInfo[0];
             int peerPorta = Integer.parseInt(peerInfo[1]);
 
             estabelecerConexao(peerEndereco, peerPorta);
-            combinarArquivoParaDownload(nomeArquivo);            
-            downloadArquivo(nomeArquivo);
+            combinarArquivoParaDownload(this.arquivoAlvo);            
+            downloadArquivo(this.arquivoAlvo);
             System.out.println("FIM DOWNLOAD");
         }
 
@@ -261,21 +289,6 @@ public class Peer {
             System.out.println("PEERS COM O ARQUIVO:" + mensagemPeersComOArquivo);
             return mensagemPeersComOArquivo;
         }
-
-        private String getArquivoNomeArquivoRequerido() {
-            //INPUT DO USUARIO SOBRE QUAL ARQUIVO QUER BAIXAR
-            System.out.println("Digite o nome do arquivo (com extensão) que desaja baixar:");
-            BufferedReader inputUsuario = new BufferedReader(new InputStreamReader(System.in));
-            String nomArquivo = "";
-            
-            try {
-                nomArquivo = inputUsuario.readLine();
-            } catch (IOException e1) {
-
-                e1.printStackTrace();
-            }
-            return nomArquivo;
-        }
     }
 
     public static void main(String[] args) throws IOException {
@@ -294,7 +307,6 @@ public class Peer {
 
         Peer peer = new Peer(port, ipAddress, clientName);
         peer.startServer();
-        // client.startServer();
         peer.startClientConsumer();;
     }
 }
