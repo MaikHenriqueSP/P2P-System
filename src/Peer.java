@@ -20,6 +20,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Classe atua como distribuídora dos arquivos que possuí e também realiza downloads de arquivos
+ * conforme requisições do usuário.
+ * 
+ * @author Maik Henrique
+ */
 public class Peer {
 
     private ServerSocket servidor;
@@ -31,7 +37,11 @@ public class Peer {
     private static final String CAMINHO_BASE_DOWNLOAD = "client/resource/";
     private String caminhoPastaDownloadsCliente;
     private List<String> arquivosDisponiveis;
-    public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8; //8 kbytes por pacote
+    
+    /**
+     *  Define o tamanho padrão dos pacotes para transferência, sendo padronizados em 8 kbytes.
+     */
+    public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8; 
     
     private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
     private final Thread clienteThread = new Thread(() -> iniciarDownloader());    
@@ -39,6 +49,15 @@ public class Peer {
     private final BufferedReader leitorInputTeclado;
     private final String enderecoEscuta;    
 
+    /**
+     * Cada Peer se torna disponível para compartilhamento de seus arquivos e para efetuar downloads somente
+     * quando sua participação no sistema P2P é confirmada pelo Servidor.
+     * 
+     * @param porta
+     * @param enderecoIp
+     * @param nomeCliente
+     * @throws IOException
+     */
     public Peer(int porta, String enderecoIp, String nomeCliente) throws IOException {
         this.servidor = new ServerSocket(porta);
         this.enderecoIp = enderecoIp;
@@ -56,6 +75,24 @@ public class Peer {
         joinServidor();
     }
 
+
+    /**
+     * Inicializa uma thread para atuar como escuta por conexões TCP para a trasferencia de arquivos para outros Peers.
+     */
+    public void iniciarThreadServidorCompartilhamento() {
+        servidorThread.start();
+    }
+    
+    /**
+     * Inicializa uma thread exclusiva para lidar com requisições de download de arquivos pelo usuário.
+     */
+    public void iniciarThreadDownloader() {
+        clienteThread.start();
+    }  
+
+    /**
+     * Efetua requisição JOIN ao servidor e aguarda por uma resposta.
+     */
     private void joinServidor() {
         Mensagem mensagem = new Mensagem("JOIN");
 
@@ -75,22 +112,9 @@ public class Peer {
         }
     }
 
-    private List<String> getListaNomesArquivosDeVideo(File clientFile) {
-        return Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
-    }
-    
-    private void criarPastaSeNaoExistir(File clienteFile) {
-        clienteFile.mkdirs();
-    }
-    
-    public void iniciarThreadServidorCompartilhamento() {
-        servidorThread.start();
-    }
-    
-    public void iniciarThreadDownloader() {
-        clienteThread.start();
-    }  
-    
+    /**
+     * Ouvinte de conexões TCP, assim quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.
+     */
     private void iniciarServidorCompartilhamento() {
         while (true) {
             try {
@@ -101,7 +125,10 @@ public class Peer {
             }
         }
     }
-
+    
+    /**
+     * A cada arquivo que é solicitado pelo usuário, delega uma nova thread responsável por lidar com o download do arquivo. 
+     */
     private void iniciarDownloader() {
         while (true) {
             String arquivoAlvo = getNomeArquivoAlvo();
@@ -109,6 +136,14 @@ public class Peer {
                 new FileClientThread(arquivoAlvo).start();
             }
         }
+    }
+
+    private List<String> getListaNomesArquivosDeVideo(File clientFile) {
+        return Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
+    }
+    
+    private void criarPastaSeNaoExistir(File clienteFile) {
+        clienteFile.mkdirs();
     }
 
     private String getNomeArquivoAlvo() {
@@ -129,21 +164,29 @@ public class Peer {
         }        
     }
        
-    /*
-    * The class aims to enable multiple clients downloading from the same server concurrently on which
-    * each thread is going to be responsible to talk to a client "privately"
-    */
+    /**
+     * Classe representante da thread que atua como compartilhadora de arquivos para outros Peers, atuando de forma concorrente.
+     */
     class FileServerThread extends Thread {
         private Socket socket;
         private OutputStream outputStream;
         private InputStream inputStream;
 
+        /**
+         * @param socket socket construído após o aceite de conexão pelo método ouvinte.
+         * @throws IOException
+         */
         public FileServerThread(Socket socket) throws IOException {
             this.socket = socket;
             this.outputStream = socket.getOutputStream();
             this.inputStream = socket.getInputStream();
         }
 
+        /**
+         * Controla o fluxo de execução da thread. Iniciando pela espera de uma mensagem TCP para fazer um 
+         * hand-shake de qual arquivo o cliente deseja, após o recebimento da mensagem, inicia a transferência do
+         * arquivo para o cliente via o canal de comunicação estabelecido.
+         */
         @Override
         public void run() {
             Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
@@ -157,6 +200,11 @@ public class Peer {
             }
         }
 
+        /**
+         * Responsável por ler o arquivo em disco, e efetua a transferência em pacotes de bytes via canal estabelecido.
+         * 
+         * @param caminhoArquivoRequisitado
+         */
         private void transferirArquivo(String caminhoArquivoRequisitado) {
             try (BufferedOutputStream escritorStream = new BufferedOutputStream(outputStream);
                 BufferedInputStream leitorArquivo = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
@@ -171,10 +219,9 @@ public class Peer {
         }
     }
 
-    /*
-    *  Intended to act as a thread which receives a single file per thread from the server, so its main purpose is to allows 
-    *  donwloading files from multiple servers concurrently.
-    */
+    /**
+     * Atua como uma thread responsável pelo download de um arquivo.
+     */
     class FileClientThread extends Thread {
         private Socket socket;
         private InputStream inputStream;
@@ -186,6 +233,11 @@ public class Peer {
             this.arquivoAlvo = arquivoAlvo;
         }
 
+        /**
+         * Controla o fluxo de execução da thread. Inicia requisitando uma lista de Peers com o arquivo de interesse e
+         * então estabelece conexão TCP com um dos Peers, combinando então qual o arquivo que será baixado e por fim
+         * requisita o download de fato.
+         */
         @Override
         public void run() {
             Set<String> peersComAOrquivoAlvo = getPeersComArquivo(this.arquivoAlvo);
@@ -195,6 +247,11 @@ public class Peer {
             downloadArquivo();
         }
 
+        /**
+         * Estabelece conexão TCP com um Peer e instancia os streams necessários para a transferência de dados.        
+         * 
+         * @param peersComAOrquivoAlvo conjunto de endereços com os peers que possuem o arquivo desejado.
+         */
         private void estabelecerConexao(Set<String> peersComAOrquivoAlvo) {
             try {
                 String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split(":");
@@ -208,6 +265,15 @@ public class Peer {
             }
         }
 
+        /**
+         * Faz uma requisição UDP para o Peer cuja a conexão TCP foi estabelecida.
+         */
+        private void combinarArquivoParaDownload() {
+            Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
+            arquivoRequerido.adicionarMensagem("arquivo_solicitado", this.arquivoAlvo);
+            Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
+        }
+
         private void criarArquivoSeNaoExistir(File file) {
             try {
                 file.createNewFile();
@@ -216,12 +282,9 @@ public class Peer {
             }
         }
 
-        private void combinarArquivoParaDownload() {
-            Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
-            arquivoRequerido.adicionarMensagem("arquivo_solicitado", this.arquivoAlvo);
-            Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
-        }
-
+        /**
+         * Orquestra o download do arquivo, recebendo os bytes em pacotes e os escrevendo no arquivo.
+         */
         private void downloadArquivo() {
             String caminhoEscritaArquivo = caminhoPastaDownloadsCliente + this.arquivoAlvo;            
             File file = new File(caminhoEscritaArquivo);
@@ -245,6 +308,9 @@ public class Peer {
             }
         }
 
+        /**
+         * Faz requisição UPDATE ao servidor, para atualizar os arquivos que possuí e está disposto a compartilhar.
+         */
         private void enviarRequisicaoUpdate() {
             Mensagem update = new Mensagem("UPDATE");
             update.adicionarMensagem("arquivo", arquivoAlvo);
@@ -266,11 +332,20 @@ public class Peer {
             return null;
         }
 
+        /**
+         * Orquestra a requisição SEARCH com o servidor, criando um socket UDP para o envio da mensagem e posteriormente
+         * esperando pela resposta do servidor pelo conjunto de Peers com o arquivo.
+         * 
+         * @TODO: Lida com edge cases, como quando o servidor não responde
+         * 
+         * @param arquivoAlvo
+         * @return conjunto de endereço dos Peers com o arquivo requerido.
+         */
         private Set<String> getPeersComArquivo(String arquivoAlvo) {
             try {
                 this.socketUDP = new DatagramSocket();
                 requisicaoSearchPorPeers(arquivoAlvo);
-                Mensagem mensagemPeersComOArquivo = receberPeersComArquivo();
+                Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(socketUDP);
     
                 return getDadosPeer(mensagemPeersComOArquivo);
             } catch (SocketException e) {
@@ -281,11 +356,10 @@ public class Peer {
 
         }
 
-        private Mensagem receberPeersComArquivo() {
-            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(socketUDP);
-            return mensagemPeersComOArquivo;
-        }
-
+        /**
+         * Constrói e encaminha uma requisição SEARCH ao servidor via mensagem UDP, solicitando os Peers que possuem o arquivo alvo.
+         * @param arquivoAlvo
+         */
         private void requisicaoSearchPorPeers(String arquivoAlvo) {
             Mensagem requisicaoPeers = new Mensagem("SEARCH");
             requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
