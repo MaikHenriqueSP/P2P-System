@@ -206,9 +206,8 @@ public class Peer {
 
         @Override
         public void run() {
-            Mensagem mensagemPeersComOArquivo = getPeersComArquivo(this.arquivoAlvo);
-            
-            String[] peerInfo = getDadosPeer(mensagemPeersComOArquivo);
+            Set<String> peersComAOrquivoAlvo = getPeersComArquivo(this.arquivoAlvo);
+            String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split("_");
             String peerEndereco = peerInfo[0];
             int peerPorta = Integer.parseInt(peerInfo[1]);
 
@@ -253,31 +252,31 @@ public class Peer {
             }
         }
 
-        private String[] getDadosPeer(Mensagem mensagemPeersComOArquivo) {
+        private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
             Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
             String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
-
-            String[] peerInfo = null;
             
             if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof Set<?>) {
                 @SuppressWarnings("unchecked")
-                Set<String> listaPeers = (Set<String>) mensagensArquivosPeer.get("lista_peers");
-                peerInfo = listaPeers.stream().findFirst().get().split("_");
+                Set<String> conjuntPeersComArquivo = (Set<String>) mensagensArquivosPeer.get("lista_peers");
+                return conjuntPeersComArquivo;
             }
-            return peerInfo;
+            return null;
         }
 
-        private Mensagem getPeersComArquivo(String arquivoAlvo) {
+        private Set<String> getPeersComArquivo(String arquivoAlvo) {
             try {
                 this.datagramSocket = new DatagramSocket();
+                requisicaoSearchPorPeers(arquivoAlvo);
+                Mensagem mensagemPeersComOArquivo = receberPeersComArquivo();
+    
+                return getDadosPeer(mensagemPeersComOArquivo);
             } catch (SocketException e) {
                 e.printStackTrace();
             }
 
-            requisicaoSearchPorPeers(arquivoAlvo);
-            Mensagem mensagemPeersComOArquivo = receberPeersComArquivo();
+            return null;
 
-            return mensagemPeersComOArquivo;
         }
 
         private Mensagem receberPeersComArquivo() {
