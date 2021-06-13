@@ -186,9 +186,12 @@ public class Peer {
             this.arquivoAlvo = arquivoAlvo;
         }
 
-        private void estabelecerConexao(String host, int port) {
+        private void estabelecerConexao(Set<String> peersComAOrquivoAlvo) {
             try {
-                this.socket = new Socket("localhost", port);
+                String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split("_");
+                int porta = Integer.parseInt(peerInfo[1]);
+
+                this.socket = new Socket("localhost", porta);
                 this.inputStream = socket.getInputStream();
                 this.outputStream = socket.getOutputStream();
             } catch (IOException e) {
@@ -207,11 +210,7 @@ public class Peer {
         @Override
         public void run() {
             Set<String> peersComAOrquivoAlvo = getPeersComArquivo(this.arquivoAlvo);
-            String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split("_");
-            String peerEndereco = peerInfo[0];
-            int peerPorta = Integer.parseInt(peerInfo[1]);
-
-            estabelecerConexao(peerEndereco, peerPorta);
+            estabelecerConexao(peersComAOrquivoAlvo);
             combinarArquivoParaDownload(this.arquivoAlvo);            
             downloadArquivo(this.arquivoAlvo);
             System.out.println("FIM DOWNLOAD");
