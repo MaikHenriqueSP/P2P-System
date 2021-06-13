@@ -11,6 +11,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ *  Classe responsável por coordenar o compartilhamento de arquivos entre Peers
+ * 
+ * @author Maik Henrique
+ */
 public class Servidor implements AutoCloseable {
 
     private final DatagramSocket socketUDP;
@@ -25,6 +30,14 @@ public class Servidor implements AutoCloseable {
         this.mapaArquivosParaEnderecoPeers = new HashMap<>();
     }
 
+    /**
+     * Método usado como um listener do servidor, ou seja, em estado block aguardando o recebimento de mensagens via UDP.
+     * Assim a cada mensagem recebida inicializa-se uma thread (RequisicaoClienteThread) que será responsável por lidar com a requisição,
+     * possibilitando assim que o servidor lide com várias requisições de forma simultânea.
+     * 
+     * @throws IOException
+     * @throws ClassNotFoundException
+     */
     public void ligarServidor() throws IOException, ClassNotFoundException {
         while (true) {
             byte[] bytesRecebidos = new byte[8 * 1024];
@@ -39,6 +52,11 @@ public class Servidor implements AutoCloseable {
         socketUDP.close();        
     }
 
+    /**
+     * Classe de suporte, usada para atuar como uma thread lidando com requições do cliente.
+     * Assim possui o pacote recebido via UDP e faz modificações concorrentes no estado do servidor,
+     * adicionando, removendo e atualizando os peers e arquivos disponíveis.
+     */
     class RequisicaoClienteThread extends Thread {
         private DatagramPacket pacoteRecebido;
 
@@ -49,25 +67,14 @@ public class Servidor implements AutoCloseable {
         @Override
         public void run() {
             Mensagem mensageDoCliente = lerMensagemDoCliente();
-            tratarRequisicao(mensageDoCliente);
-            
+            tratarRequisicao(mensageDoCliente);            
         }
 
-        private Mensagem lerMensagemDoCliente() {
-            byte[] receivedData = this.pacoteRecebido.getData();
-            
-            
-            try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(receivedData);
-                ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));
-            ) {                
-                return (Mensagem) inputObject.readObject();
-            } catch (ClassNotFoundException | IOException e) {
-                e.printStackTrace();
-            }
-            
-            return null;
-        }
-
+        /**
+         * Trata a requisição do cliente e fazendo os redirecionamentos aos métodos adequados.
+         * 
+         * @param mensagem mensagem de requisição recebida do cliente
+         */
         public void tratarRequisicao(Mensagem mensagem) {
             String requisicao = mensagem.getTitulo();   
 
@@ -91,33 +98,33 @@ public class Servidor implements AutoCloseable {
             }
         }
 
-        private void atualizarPeer(Mensagem mensagem) {
+        /**
+         *  Lida com requisições JOIN, adicionando aos mapas peer -> arquivos e arquivo -> peers.
+         * 
+         * @param mensagem mensagem recebida na requisição JOIN
+         */
+        private void adicionarPeer(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();
-            String arquivo = (String) mensagens.get("arquivo");
-            String endereco = (String) mensagens.get("endereco");
+            String identidadePeer = (String) mensagens.get("endereco");
+            
+            Set<String> videos = getVideosPeer(mensagem);
+            
+            if ( videos != null && identidadePeer != null ) {
+                mapaEnderecoPeersParaArquivos.put(identidadePeer, videos);
+                mapearVideoParaPeer(identidadePeer, videos);
 
-            adicionarMapeamentoPeerParaArquivos(arquivo, endereco);
-            adicionarMapeamentoArquivoParaPeers(arquivo, endereco);
+                System.out.println(String.format("Peer %s adicionado com os arquivos: \n%s", identidadePeer, videos));
 
-            Mensagem updateOK = new Mensagem("UPDATE_OK");
-            Mensagem.enviarMensagemUDP(updateOK, "localhost", pacoteRecebido.getPort(), socketUDP);
+                Mensagem mensagemResposta = new Mensagem("JOIN_OK");
+                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", pacoteRecebido.getPort(), socketUDP);
+            }
         }
 
-        private void adicionarMapeamentoPeerParaArquivos(String arquivo, String endereco) {
-            Set<String> arquivosPorPeer = mapaEnderecoPeersParaArquivos.getOrDefault(endereco, new HashSet<>());
-            arquivosPorPeer.add(arquivo);
-            mapaEnderecoPeersParaArquivos.put(endereco, arquivosPorPeer);
-        }
-
-        private void adicionarMapeamentoArquivoParaPeers(String arquivo, String endereco) {
-            Set<String> peersPorArquivo = mapaArquivosParaEnderecoPeers.getOrDefault(arquivo, new HashSet<>());
-            peersPorArquivo.add(endereco);
-            mapaArquivosParaEnderecoPeers.put(arquivo, peersPorArquivo);
-        }
-
-        private void removerPeer() {
-        }
-
+        /**
+         * Lida com requisições SEARCH, encontrando a lista de peers que possuem o arquivo e os envia para o cliente
+         * 
+         * @param mensagem mensagem recebida na requisição JOIN
+         */
         private void procurarArquivo(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();
                         
@@ -134,22 +141,55 @@ public class Servidor implements AutoCloseable {
             }
 
         }
-        
-        private void adicionarPeer(Mensagem mensagem) {
+
+        /**
+         * Lida com requisições do tipo LEAVE
+         */
+        private void removerPeer() {
+        }
+
+        /**
+         * Lida com requisições UPDATE, que ocorrem após um Peer finalizar o download de arquivo e tornando-se assim
+         * também um compartilhador do arquivo para outros peers.
+         * 
+         * @param mensagem mensagem recebida na requisição UPDATE
+         */
+        private void atualizarPeer(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();
-            String identidadePeer = (String) mensagens.get("endereco");
-            
-            Set<String> videos = getVideosPeer(mensagem);
-            
-            if ( videos != null && identidadePeer != null ) {
-                mapaEnderecoPeersParaArquivos.put(identidadePeer, videos);
-                mapearVideoParaPeer(identidadePeer, videos);
+            String arquivo = (String) mensagens.get("arquivo");
+            String endereco = (String) mensagens.get("endereco");
 
-                System.out.println(String.format("Peer %s adicionado com os arquivos: \n%s", identidadePeer, videos));
+            adicionarMapeamentoPeerParaArquivos(arquivo, endereco);
+            adicionarMapeamentoArquivoParaPeers(arquivo, endereco);
 
-                Mensagem mensagemResposta = new Mensagem("JOIN_OK");
-                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", pacoteRecebido.getPort(), socketUDP);
+            Mensagem updateOK = new Mensagem("UPDATE_OK");
+            Mensagem.enviarMensagemUDP(updateOK, "localhost", pacoteRecebido.getPort(), socketUDP);
+        }
+
+        private Mensagem lerMensagemDoCliente() {
+            byte[] receivedData = this.pacoteRecebido.getData();
+                        
+            try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(receivedData);
+                ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));
+            ) {                
+                return (Mensagem) inputObject.readObject();
+            } catch (ClassNotFoundException | IOException e) {
+                e.printStackTrace();
             }
+            
+            return null;
+        }
+
+        private void adicionarMapeamentoPeerParaArquivos(String arquivo, String endereco) {
+            Set<String> arquivosPorPeer = mapaEnderecoPeersParaArquivos.getOrDefault(endereco, new HashSet<>());
+            arquivosPorPeer.add(arquivo);
+            mapaEnderecoPeersParaArquivos.put(endereco, arquivosPorPeer);
+        }
+
+        private void adicionarMapeamentoArquivoParaPeers(String arquivo, String endereco) {
+            Set<String> peersPorArquivo = mapaArquivosParaEnderecoPeers.getOrDefault(arquivo, new HashSet<>());
+            peersPorArquivo.add(endereco);
+            mapaArquivosParaEnderecoPeers.put(arquivo, peersPorArquivo);
         }
 
         private void mapearVideoParaPeer(String endereco, Set<String> videos) {
