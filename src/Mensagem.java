@@ -59,35 +59,34 @@ public class Mensagem implements Serializable {
         }
     }
 
-    public static void enviarMensagemUDP(Mensagem mensagem, String endereco, int port, DatagramSocket datagramSocket) {
-        InetAddress hostEndereco;
+    public static void enviarMensagemUDP(Mensagem mensagem, String endereco, int porta, DatagramSocket socketUDP) {
+        InetAddress enderecoDestinatarioInet;
         try {
-            hostEndereco = InetAddress.getByName(endereco);
+            enderecoDestinatarioInet = InetAddress.getByName(endereco);
             ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
             ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteOutputStream));
             
             objectOutputStream.writeObject(mensagem);
             objectOutputStream.flush();
-            byte[] messageInBytesArray = byteOutputStream.toByteArray();
+            byte[] mensagemEmBytes = byteOutputStream.toByteArray();
     
-            DatagramPacket packet = new DatagramPacket(messageInBytesArray, messageInBytesArray.length, hostEndereco, port);
-            datagramSocket.send(packet);
+            DatagramPacket packet = new DatagramPacket(mensagemEmBytes, mensagemEmBytes.length, enderecoDestinatarioInet, porta);
+            socketUDP.send(packet);
         } catch (IOException e) {
             e.printStackTrace();
         }        
     }
 
-    public static Mensagem receberMensagemUDP(DatagramSocket datagramSocket) {
-        byte[] receivedBytes = new byte[8 * 1024];
-        DatagramPacket spacket = new DatagramPacket(receivedBytes, receivedBytes.length);
+    public static Mensagem receberMensagemUDP(DatagramSocket socketUDP) {
+        byte[] bytesRecebidos = new byte[8 * 1024];
+        DatagramPacket pacote = new DatagramPacket(bytesRecebidos, bytesRecebidos.length);
         try {
-            datagramSocket.receive(spacket);
+            socketUDP.receive(pacote);
         } catch (IOException e1) {
-            // TODO Auto-generated catch block
             e1.printStackTrace();
         }
         
-        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(spacket.getData());
+        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(pacote.getData());
             ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));) {            
             return (Mensagem) inputObject.readObject();
         } catch (ClassNotFoundException | IOException e) {
