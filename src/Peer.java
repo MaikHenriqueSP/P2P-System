@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 public class Peer {
 
     private ServerSocket server;
-    private String ipAddress;
+    private String enderecoIp;
 
     // @TODO: remove it and receive the path to the client's file folder
     private String clientName;
@@ -40,9 +40,9 @@ public class Peer {
     private final String enderecoEscuta;
     
 
-    public Peer(int port, String ipAddress, String clientName) throws IOException {
+    public Peer(int port, String enderecoIp, String clientName) throws IOException {
         this.server = new ServerSocket(port);
-        this.ipAddress = ipAddress;
+        this.enderecoIp = enderecoIp;
         this.clientName = clientName.toLowerCase();
         this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + this.clientName + "/";
 
@@ -52,7 +52,7 @@ public class Peer {
         
         this.userInputReader = new BufferedReader(new InputStreamReader(System.in));
 
-        this.enderecoEscuta = ipAddress + ":" + port;
+        this.enderecoEscuta = enderecoIp + ":" + port;
 
         joinServidor();
     }
@@ -61,8 +61,7 @@ public class Peer {
         Mensagem mensagem = new Mensagem("JOIN");
 
         mensagem.adicionarMensagem("arquivos", filesAvailable);
-        mensagem.adicionarMensagem("address", ipAddress);
-        mensagem.adicionarMensagem("port", String.valueOf(server.getLocalPort()));
+        mensagem.adicionarMensagem("endereco", this.enderecoEscuta);
 
         try (DatagramSocket datagramSocket = new DatagramSocket()){
             Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
@@ -201,7 +200,7 @@ public class Peer {
 
         private void estabelecerConexao(Set<String> peersComAOrquivoAlvo) {
             try {
-                String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split("_");
+                String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split(":");
                 int porta = Integer.parseInt(peerInfo[1]);
 
                 this.socket = new Socket("localhost", porta);

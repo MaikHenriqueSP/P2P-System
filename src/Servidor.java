@@ -109,7 +109,7 @@ public class Servidor implements AutoCloseable {
                 String enderecoEscutaPeer = (String) mensagens.get("endereco");
                 Set<String> peersPorArquivoRequisitado = mapFilesToPeersAddress.get(arquivoRequisitado);
 
-                System.out.println(String.format("Peer %s solicitou arquivo %s", enderecoEscutaPeer, arquivoRequisitado));
+                System.out.println(String.format("Peer %s solicitou o arquivo %s", enderecoEscutaPeer, arquivoRequisitado));
 
                 Mensagem mensagemResposta = new Mensagem("SEARCH_OK");
                 mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
@@ -119,14 +119,16 @@ public class Servidor implements AutoCloseable {
         }
         
         private void adicionarPeer(Mensagem mensagem) {
-            String peerIdentity = getIdentidadePeer(mensagem);
+            Map<String, Object> mensagens = mensagem.getMensagens();
+            String identidadePeer = (String) mensagens.get("endereco");
+            
             Set<String> videos = getVideosPeer(mensagem);
             
-            if ( videos != null && peerIdentity != null ) {
-                mapPeerAddressToFiles.put(peerIdentity, videos);
-                mapearVideoParaPeer(peerIdentity, videos);
+            if ( videos != null && identidadePeer != null ) {
+                mapPeerAddressToFiles.put(identidadePeer, videos);
+                mapearVideoParaPeer(identidadePeer, videos);
 
-                System.out.println(String.format("Peer %s adicionado com arquivos: \n%s", peerIdentity, videos));
+                System.out.println(String.format("Peer %s adicionado com os arquivos: \n%s", identidadePeer, videos));
 
                 Mensagem mensagemResposta = new Mensagem("JOIN_OK");
                 enviarMensagemAoCliente(mensagemResposta);
@@ -139,17 +141,6 @@ public class Servidor implements AutoCloseable {
                     peers.add(peerIdentity);
                     mapFilesToPeersAddress.put(video, peers); 
             });
-        }
-
-        private String getIdentidadePeer(Mensagem mensagem) {
-            Map<String, Object> messagesBody = mensagem.getMensagens();
-            
-            if (messagesBody.containsKey("address") && messagesBody.containsKey("port")) {
-                String address = (String) messagesBody.get("address");
-                String port = (String) messagesBody.get("port");
-                return address + "_" + port;
-            }
-            return null;
         }
 
         private Set<String> getVideosPeer(Mensagem mensagem) {
