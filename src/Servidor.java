@@ -1,13 +1,9 @@
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -17,37 +13,37 @@ import java.util.stream.Collectors;
 
 public class Servidor implements AutoCloseable {
 
-    private final DatagramSocket socketReceptor;
+    private final DatagramSocket socketUDP;
     public static final int PORTA_SOCKET_RECEPTOR = 10098;
     public static final String ENDERECO_SERVIDOR = "localhost";
-    private final Map<String, Set<String>> mapPeerAddressToFiles;
-    private final Map<String, Set<String>> mapFilesToPeersAddress;
+    private final Map<String, Set<String>> mapaEnderecoPeersParaArquivos;
+    private final Map<String, Set<String>> mapaArquivosParaEnderecoPeers;
     
     public Servidor() throws IOException {
-        this.socketReceptor = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
-        this.mapPeerAddressToFiles = new HashMap<>();
-        this.mapFilesToPeersAddress = new HashMap<>();
+        this.socketUDP = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
+        this.mapaEnderecoPeersParaArquivos = new HashMap<>();
+        this.mapaArquivosParaEnderecoPeers = new HashMap<>();
     }
 
     public void ligarServidor() throws IOException, ClassNotFoundException {
         while (true) {
-            byte[] receivedBytes = new byte[8 * 1024];
-            DatagramPacket packet = new DatagramPacket(receivedBytes, receivedBytes.length);
-            socketReceptor.receive(packet);
-            new RequisicaoClienteThread(packet).start();
+            byte[] bytesRecebidos = new byte[8 * 1024];
+            DatagramPacket pacote = new DatagramPacket(bytesRecebidos, bytesRecebidos.length);
+            socketUDP.receive(pacote);
+            new RequisicaoClienteThread(pacote).start();
         }
     }
 
     @Override
     public void close() throws Exception {
-        socketReceptor.close();        
+        socketUDP.close();        
     }
 
     class RequisicaoClienteThread extends Thread {
-        private DatagramPacket receivedPacket;
+        private DatagramPacket pacoteRecebido;
 
-        public RequisicaoClienteThread(DatagramPacket receivedPacket) {
-            this.receivedPacket = receivedPacket;
+        public RequisicaoClienteThread(DatagramPacket pacoteRecebido) {
+            this.pacoteRecebido = pacoteRecebido;
         }
 
         @Override
@@ -58,7 +54,7 @@ public class Servidor implements AutoCloseable {
         }
 
         private Mensagem lerMensagemDoCliente() {
-            byte[] receivedData = this.receivedPacket.getData();
+            byte[] receivedData = this.pacoteRecebido.getData();
             
             
             try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(receivedData);
@@ -103,20 +99,20 @@ public class Servidor implements AutoCloseable {
             adicionarMapeamentoPeerParaArquivos(arquivo, endereco);
             adicionarMapeamentoArquivoParaPeers(arquivo, endereco);
 
-            Mensagem updateOk = new Mensagem("UPDATE_OK");
-            Mensagem.enviarMensagemUDP(updateOk, "localhost", receivedPacket.getPort(), socketReceptor);
+            Mensagem updateOK = new Mensagem("UPDATE_OK");
+            Mensagem.enviarMensagemUDP(updateOK, "localhost", pacoteRecebido.getPort(), socketUDP);
         }
 
         private void adicionarMapeamentoPeerParaArquivos(String arquivo, String endereco) {
-            Set<String> arquivosPorPeer = mapPeerAddressToFiles.getOrDefault(endereco, new HashSet<>());
+            Set<String> arquivosPorPeer = mapaEnderecoPeersParaArquivos.getOrDefault(endereco, new HashSet<>());
             arquivosPorPeer.add(arquivo);
-            mapPeerAddressToFiles.put(endereco, arquivosPorPeer);
+            mapaEnderecoPeersParaArquivos.put(endereco, arquivosPorPeer);
         }
 
         private void adicionarMapeamentoArquivoParaPeers(String arquivo, String endereco) {
-            Set<String> peersPorArquivo = mapFilesToPeersAddress.getOrDefault(arquivo, new HashSet<>());
+            Set<String> peersPorArquivo = mapaArquivosParaEnderecoPeers.getOrDefault(arquivo, new HashSet<>());
             peersPorArquivo.add(endereco);
-            mapFilesToPeersAddress.put(arquivo, peersPorArquivo);
+            mapaArquivosParaEnderecoPeers.put(arquivo, peersPorArquivo);
         }
 
         private void removerPeer() {
@@ -128,13 +124,13 @@ public class Servidor implements AutoCloseable {
             if (mensagens.get("arquivo_requistado") instanceof String ) {
                 String arquivoRequisitado = (String) mensagens.get("arquivo_requistado");
                 String enderecoEscutaPeer = (String) mensagens.get("endereco");
-                Set<String> peersPorArquivoRequisitado = mapFilesToPeersAddress.get(arquivoRequisitado);
+                Set<String> peersPorArquivoRequisitado = mapaArquivosParaEnderecoPeers.get(arquivoRequisitado);
 
                 System.out.println(String.format("Peer %s solicitou o arquivo %s", enderecoEscutaPeer, arquivoRequisitado));
 
                 Mensagem mensagemResposta = new Mensagem("SEARCH_OK");
                 mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
-                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", receivedPacket.getPort(), socketReceptor);
+                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", pacoteRecebido.getPort(), socketUDP);
             }
 
         }
@@ -146,13 +142,13 @@ public class Servidor implements AutoCloseable {
             Set<String> videos = getVideosPeer(mensagem);
             
             if ( videos != null && identidadePeer != null ) {
-                mapPeerAddressToFiles.put(identidadePeer, videos);
+                mapaEnderecoPeersParaArquivos.put(identidadePeer, videos);
                 mapearVideoParaPeer(identidadePeer, videos);
 
                 System.out.println(String.format("Peer %s adicionado com os arquivos: \n%s", identidadePeer, videos));
 
                 Mensagem mensagemResposta = new Mensagem("JOIN_OK");
-                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", receivedPacket.getPort(), socketReceptor);
+                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", pacoteRecebido.getPort(), socketUDP);
             }
         }
 
