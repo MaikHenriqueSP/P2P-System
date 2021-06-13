@@ -239,10 +239,20 @@ public class Peer {
                 } 
                 
                 System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, clientResourcesFilePath));
+                enviarRequisicaoUpdate();
                 
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+
+        private void enviarRequisicaoUpdate() {
+            Mensagem update = new Mensagem("UPDATE");
+            update.adicionarMensagem("arquivo", arquivoAlvo);
+            update.adicionarMensagem("endereco", enderecoEscuta);
+            Mensagem.enviarMensagemUDP(update, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
+            
+            Mensagem updateOk = Mensagem.receberMensagemUDP(datagramSocket);
         }
 
         private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
