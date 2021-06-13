@@ -77,7 +77,6 @@ public class Servidor implements AutoCloseable {
 
             switch (requisicao) {
                 case "JOIN":
-                    System.out.println("REQUISIÇÃO JOIN RECEBIDA!");
                     adicionarPeer(mensagem);
                     break;
                 case "SEARCH":
@@ -107,7 +106,10 @@ public class Servidor implements AutoCloseable {
                         
             if (mensagens.get("arquivo_requistado") instanceof String ) {
                 String arquivoRequisitado = (String) mensagens.get("arquivo_requistado");
+                String enderecoEscutaPeer = (String) mensagens.get("endereco");
                 Set<String> peersPorArquivoRequisitado = mapFilesToPeersAddress.get(arquivoRequisitado);
+
+                System.out.println(String.format("Peer %s solicitou arquivo %s", enderecoEscutaPeer, arquivoRequisitado));
 
                 Mensagem mensagemResposta = new Mensagem("SEARCH_OK");
                 mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
@@ -119,11 +121,12 @@ public class Servidor implements AutoCloseable {
         private void adicionarPeer(Mensagem mensagem) {
             String peerIdentity = getIdentidadePeer(mensagem);
             Set<String> videos = getVideosPeer(mensagem);
-            System.out.println(videos);
             
             if ( videos != null && peerIdentity != null ) {
                 mapPeerAddressToFiles.put(peerIdentity, videos);
                 mapearVideoParaPeer(peerIdentity, videos);
+
+                System.out.println(String.format("Peer %s adicionado com arquivos: \n%s", peerIdentity, videos));
 
                 Mensagem mensagemResposta = new Mensagem("JOIN_OK");
                 enviarMensagemAoCliente(mensagemResposta);
@@ -177,7 +180,6 @@ public class Servidor implements AutoCloseable {
                 DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
 
                 socketReceptor.send(packet);
-                System.out.println("MENSAGEM ENVIADA AO CLIENTE");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -186,7 +188,6 @@ public class Servidor implements AutoCloseable {
 
     public static void main(String[] args) {
         try (Servidor servidor = new Servidor()){            
-            System.out.println("INICIALIZANDO SERVIDOR");
             servidor.ligarServidor();
         } catch (Exception e) {
             e.printStackTrace();

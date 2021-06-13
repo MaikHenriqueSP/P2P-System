@@ -37,6 +37,8 @@ public class Peer {
     private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
 
     private final BufferedReader userInputReader;
+    private final String enderecoEscuta;
+    
 
     public Peer(int port, String ipAddress, String clientName) throws IOException {
         this.server = new ServerSocket(port);
@@ -49,6 +51,8 @@ public class Peer {
         this.filesAvailable = getListaNomeArquivosDeVideo(clientFile);
         
         this.userInputReader = new BufferedReader(new InputStreamReader(System.in));
+
+        this.enderecoEscuta = ipAddress + ":" + port;
 
         joinServidor();
     }
@@ -286,6 +290,7 @@ public class Peer {
         private void requisicaoSearchPorPeers(String arquivoAlvo) {
             Mensagem requisicaoPeers = new Mensagem("SEARCH");
             requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
+            requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
             Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
         }
     }
