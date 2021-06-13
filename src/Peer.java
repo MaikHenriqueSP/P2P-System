@@ -186,7 +186,7 @@ public class Peer {
             this.arquivoAlvo = arquivoAlvo;
         }
 
-        public void estabelecerConexao(String host, int port) {
+        private void estabelecerConexao(String host, int port) {
             try {
                 this.socket = new Socket("localhost", port);
                 this.inputStream = socket.getInputStream();
@@ -273,19 +273,22 @@ public class Peer {
             } catch (SocketException e) {
                 e.printStackTrace();
             }
-            //ENVIO DA PERGUNTA AO SERVIDOR SOBRE QUAIS PEERS TEM O ARQUIVO
+
+            requisicaoSearchPorPeers(arquivoAlvo);
+            Mensagem mensagemPeersComOArquivo = receberPeersComArquivo();
+
+            return mensagemPeersComOArquivo;
+        }
+
+        private Mensagem receberPeersComArquivo() {
+            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(datagramSocket);
+            return mensagemPeersComOArquivo;
+        }
+
+        private void requisicaoSearchPorPeers(String arquivoAlvo) {
             Mensagem requisicaoPeers = new Mensagem("SEARCH");
             requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
-            
-            System.out.println("REQUISITANDO AO SERVIDOR A LISTA DE PEERS QUE POSSUEM O ARQUIVO:" + arquivoAlvo);
             Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
-
-
-            //RECEBIMENTO DO SERVIDOR DA LISTA DE PEERS COM O ARQUIVO
-            System.out.println("AGUARDANDO LISTA DE PEERS COM O ARQUIVO:");
-            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(datagramSocket);
-            System.out.println("PEERS COM O ARQUIVO:" + mensagemPeersComOArquivo);
-            return mensagemPeersComOArquivo;
         }
     }
 
