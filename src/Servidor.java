@@ -104,7 +104,7 @@ public class Servidor implements AutoCloseable {
             adicionarMapeamentoArquivoParaPeers(arquivo, endereco);
 
             Mensagem updateOk = new Mensagem("UPDATE_OK");
-            enviarMensagemAoCliente(updateOk);
+            Mensagem.enviarMensagemUDP(updateOk, "localhost", receivedPacket.getPort(), socketReceptor);
         }
 
         private void adicionarMapeamentoPeerParaArquivos(String arquivo, String endereco) {
@@ -134,7 +134,7 @@ public class Servidor implements AutoCloseable {
 
                 Mensagem mensagemResposta = new Mensagem("SEARCH_OK");
                 mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
-                enviarMensagemAoCliente(mensagemResposta);
+                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", receivedPacket.getPort(), socketReceptor);
             }
 
         }
@@ -152,7 +152,7 @@ public class Servidor implements AutoCloseable {
                 System.out.println(String.format("Peer %s adicionado com os arquivos: \n%s", identidadePeer, videos));
 
                 Mensagem mensagemResposta = new Mensagem("JOIN_OK");
-                enviarMensagemAoCliente(mensagemResposta);
+                Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", receivedPacket.getPort(), socketReceptor);
             }
         }
 
@@ -172,28 +172,7 @@ public class Servidor implements AutoCloseable {
                 return videos;
             }
             return null;
-        }
-
-        private void enviarMensagemAoCliente(Mensagem mensagemParaCliente) {
-            InetAddress clienteEndereco = receivedPacket.getAddress();    
-            int clientePort = receivedPacket.getPort();
-
-            
-            try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                ObjectOutputStream objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(byteArrayOutputStream));
-            ) {                
-                objectOutputStream.writeObject(mensagemParaCliente);
-                objectOutputStream.flush();
-                   
-                byte[] byteMessage = byteArrayOutputStream.toByteArray();
-   
-                DatagramPacket packet = new DatagramPacket(byteMessage, byteMessage.length, clienteEndereco, clientePort);
-
-                socketReceptor.send(packet);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }       
+        }      
     }
 
     public static void main(String[] args) {
