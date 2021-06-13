@@ -186,6 +186,15 @@ public class Peer {
             this.arquivoAlvo = arquivoAlvo;
         }
 
+        @Override
+        public void run() {
+            Set<String> peersComAOrquivoAlvo = getPeersComArquivo(this.arquivoAlvo);
+            estabelecerConexao(peersComAOrquivoAlvo);
+            combinarArquivoParaDownload();            
+            downloadArquivo();
+            System.out.println("FIM DOWNLOAD");
+        }
+
         private void estabelecerConexao(Set<String> peersComAOrquivoAlvo) {
             try {
                 String[] peerInfo = peersComAOrquivoAlvo.stream().findFirst().get().split("_");
@@ -207,25 +216,16 @@ public class Peer {
             }
         }
 
-        @Override
-        public void run() {
-            Set<String> peersComAOrquivoAlvo = getPeersComArquivo(this.arquivoAlvo);
-            estabelecerConexao(peersComAOrquivoAlvo);
-            combinarArquivoParaDownload(this.arquivoAlvo);            
-            downloadArquivo(this.arquivoAlvo);
-            System.out.println("FIM DOWNLOAD");
-        }
-
-        private void combinarArquivoParaDownload(String nomArquivo) {
+        private void combinarArquivoParaDownload() {
             System.out.println("HANDSHAKE - ARQUIVO DE TRANSFERENCIA");
             Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
-            arquivoRequerido.adicionarMensagem("arquivo_solicitado", nomArquivo);
+            arquivoRequerido.adicionarMensagem("arquivo_solicitado", this.arquivoAlvo);
             Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
             System.out.println("MENSAGEM ENVIADA COM SUCESSO!");
         }
 
-        private void downloadArquivo(String nomArquivo) {
-            String writingFilePath = clientResourcesFilePath + nomArquivo;            
+        private void downloadArquivo() {
+            String writingFilePath = clientResourcesFilePath + this.arquivoAlvo;            
             File file = new File(writingFilePath);
 
             creatFileIfNotExists(file);            
