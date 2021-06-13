@@ -191,7 +191,6 @@ public class Peer {
                 this.socket = new Socket("localhost", port);
                 this.inputStream = socket.getInputStream();
                 this.outputStream = socket.getOutputStream();
-                this.datagramSocket = new DatagramSocket();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -268,18 +267,17 @@ public class Peer {
             return peerInfo;
         }
 
-        private Mensagem getPeersComArquivo(String nomArquivo) {
+        private Mensagem getPeersComArquivo(String arquivoAlvo) {
             try {
                 this.datagramSocket = new DatagramSocket();
             } catch (SocketException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
             //ENVIO DA PERGUNTA AO SERVIDOR SOBRE QUAIS PEERS TEM O ARQUIVO
             Mensagem requisicaoPeers = new Mensagem("SEARCH");
-            requisicaoPeers.adicionarMensagem("arquivo_requistado", nomArquivo);
+            requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
             
-            System.out.println("REQUISITANDO AO SERVIDOR A LISTA DE PEERS QUE POSSUEM O ARQUIVO:" + nomArquivo);
+            System.out.println("REQUISITANDO AO SERVIDOR A LISTA DE PEERS QUE POSSUEM O ARQUIVO:" + arquivoAlvo);
             Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
 
 
