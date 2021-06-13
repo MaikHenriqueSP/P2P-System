@@ -30,7 +30,7 @@ public class Peer {
 
     private static final String BASE_CLIENT_FOLDER_PATH = "client/resource/";
     private String clientResourcesFilePath;
-    private List<String> filesAvailable;
+    private List<String> arquivosDisponiveis;
     public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
     
     private final Thread serverThread = new Thread(() -> runFilesShareServer());
@@ -48,7 +48,7 @@ public class Peer {
 
         File clientFile = new File(clientResourcesFilePath);
         createClientFolderIfNotExists(clientFile);
-        this.filesAvailable = getListaNomeArquivosDeVideo(clientFile);
+        this.arquivosDisponiveis = getListaNomeArquivosDeVideo(clientFile);
         
         this.userInputReader = new BufferedReader(new InputStreamReader(System.in));
 
@@ -60,14 +60,19 @@ public class Peer {
     private void joinServidor() {
         Mensagem mensagem = new Mensagem("JOIN");
 
-        mensagem.adicionarMensagem("arquivos", filesAvailable);
+        mensagem.adicionarMensagem("arquivos", this.arquivosDisponiveis);
         mensagem.adicionarMensagem("endereco", this.enderecoEscuta);
 
         try (DatagramSocket datagramSocket = new DatagramSocket()){
             Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
             Mensagem respostaServidor = Mensagem.receberMensagemUDP(datagramSocket);
+
+            if (respostaServidor.getTitulo().equals("JOIN_OK")) {
+                System.out.println(String.format("Sou o peer %s com os arquivos: \n %s", this.enderecoEscuta, this.arquivosDisponiveis));
+            }
         } catch (SocketException e) {
             e.printStackTrace();
+            
         }
     }
 
@@ -90,9 +95,7 @@ public class Peer {
     private void runFilesShareServer() {
         while (true) {
             try {
-                System.out.println("-- ESPERANDO POR REQUISIÇÕES DE ARQUIVOS");
                 Socket client = server.accept();    
-                System.out.println("REQUISIÇÃO DE CONEXÃO RECEBIDA");
                 new FileServerThread(client).start();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -144,11 +147,7 @@ public class Peer {
 
         @Override
         public void run() {
-            System.out.println("-- AGUARDANDO POR QUAL ARQUIVO SERÁ REQUERIDO POR: " + this.socket.getPort());
-
             Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
-            System.out.println("ARQUIVO REQUERIDO:" + mensagem);
-
             Map<String, Object> mensagens = mensagem.getMensagens();
             String titulo = mensagem.getTitulo();
             
@@ -167,7 +166,6 @@ public class Peer {
                     fileWriter.write(packet);
                     fileWriter.flush();
                 }   
-                System.out.println("------ TRANSFERÊNCIA DO ARQUIVO FINALIZADO COM SUCESSO");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -192,10 +190,10 @@ public class Peer {
         @Override
         public void run() {
             Set<String> peersComAOrquivoAlvo = getPeersComArquivo(this.arquivoAlvo);
+            System.out.println(String.format("Peers com o arquivo solicitado:\n %s", peersComAOrquivoAlvo));
             estabelecerConexao(peersComAOrquivoAlvo);
             combinarArquivoParaDownload();            
             downloadArquivo();
-            System.out.println("FIM DOWNLOAD");
         }
 
         private void estabelecerConexao(Set<String> peersComAOrquivoAlvo) {
@@ -220,21 +218,15 @@ public class Peer {
         }
 
         private void combinarArquivoParaDownload() {
-            System.out.println("HANDSHAKE - ARQUIVO DE TRANSFERENCIA");
             Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
             arquivoRequerido.adicionarMensagem("arquivo_solicitado", this.arquivoAlvo);
             Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
-            System.out.println("MENSAGEM ENVIADA COM SUCESSO!");
         }
 
         private void downloadArquivo() {
             String writingFilePath = clientResourcesFilePath + this.arquivoAlvo;            
             File file = new File(writingFilePath);
-
-            creatFileIfNotExists(file);            
-
-            System.out.println("-- COMEÇANDO TRANSFERÊNCIA");
-            Long bytesTransfered = 0L;
+            creatFileIfNotExists(file);
 
             try (BufferedInputStream fileReader = new BufferedInputStream(inputStream);
                 BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file));){
@@ -244,11 +236,10 @@ public class Peer {
                 while (fileReader.read(data) != -1) {
                     fileWriter.write(data);
                     fileWriter.flush();
-                    bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
-                    System.out.println("+ KBYTES RECEIVED: " + bytesTransfered);
                 } 
                 
-                System.out.println("-- DOWNLOAD FINALIZADO COM SUCESSO");
+                System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, clientResourcesFilePath));
+                
             } catch (IOException e) {
                 e.printStackTrace();
             }
