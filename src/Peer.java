@@ -22,37 +22,36 @@ import java.util.stream.Collectors;
 
 public class Peer {
 
-    private ServerSocket server;
+    private ServerSocket servidor;
     private String enderecoIp;
 
     // @TODO: remove it and receive the path to the client's file folder
-    private String clientName;
+    private String nomeCliente;
 
-    private static final String BASE_CLIENT_FOLDER_PATH = "client/resource/";
-    private String clientResourcesFilePath;
+    private static final String CAMINHO_BASE_DOWNLOAD = "client/resource/";
+    private String caminhoPastaDownloadsCliente;
     private List<String> arquivosDisponiveis;
-    public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
+    public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8; //8 kbytes por pacote
     
-    private final Thread serverThread = new Thread(() -> runFilesShareServer());
-    private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
+    private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
+    private final Thread clienteThread = new Thread(() -> iniciarDownloader());    
 
-    private final BufferedReader userInputReader;
-    private final String enderecoEscuta;
-    
+    private final BufferedReader leitorInputTeclado;
+    private final String enderecoEscuta;    
 
-    public Peer(int port, String enderecoIp, String clientName) throws IOException {
-        this.server = new ServerSocket(port);
+    public Peer(int porta, String enderecoIp, String nomeCliente) throws IOException {
+        this.servidor = new ServerSocket(porta);
         this.enderecoIp = enderecoIp;
-        this.clientName = clientName.toLowerCase();
-        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + this.clientName + "/";
+        this.nomeCliente = nomeCliente.toLowerCase();
+        this.caminhoPastaDownloadsCliente = CAMINHO_BASE_DOWNLOAD + this.nomeCliente + "/";
 
-        File clientFile = new File(clientResourcesFilePath);
-        createClientFolderIfNotExists(clientFile);
-        this.arquivosDisponiveis = getListaNomeArquivosDeVideo(clientFile);
+        File clienteFile = new File(caminhoPastaDownloadsCliente);
+        criarPastaSeNaoExistir(clienteFile);
+        this.arquivosDisponiveis = getListaNomesArquivosDeVideo(clienteFile);
         
-        this.userInputReader = new BufferedReader(new InputStreamReader(System.in));
+        this.leitorInputTeclado = new BufferedReader(new InputStreamReader(System.in));
 
-        this.enderecoEscuta = enderecoIp + ":" + port;
+        this.enderecoEscuta = enderecoIp + ":" + porta;
 
         joinServidor();
     }
@@ -63,9 +62,9 @@ public class Peer {
         mensagem.adicionarMensagem("arquivos", this.arquivosDisponiveis);
         mensagem.adicionarMensagem("endereco", this.enderecoEscuta);
 
-        try (DatagramSocket datagramSocket = new DatagramSocket()){
-            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
-            Mensagem respostaServidor = Mensagem.receberMensagemUDP(datagramSocket);
+        try (DatagramSocket socketUDP = new DatagramSocket()){
+            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
+            Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
 
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n %s", this.enderecoEscuta, this.arquivosDisponiveis));
@@ -76,29 +75,38 @@ public class Peer {
         }
     }
 
-    private List<String> getListaNomeArquivosDeVideo(File clientFile) {
+    private List<String> getListaNomesArquivosDeVideo(File clientFile) {
         return Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
     }
     
-    private void createClientFolderIfNotExists(File clientFile) {
-        clientFile.mkdirs();
+    private void criarPastaSeNaoExistir(File clienteFile) {
+        clienteFile.mkdirs();
     }
     
-    public void startServer() {
-        serverThread.start();
+    public void iniciarThreadServidorCompartilhamento() {
+        servidorThread.start();
     }
     
-    public void startClientConsumer() {
-        clientConsumerThread.start();
+    public void iniciarThreadDownloader() {
+        clienteThread.start();
     }  
     
-    private void runFilesShareServer() {
+    private void iniciarServidorCompartilhamento() {
         while (true) {
             try {
-                Socket client = server.accept();    
+                Socket client = servidor.accept();    
                 new FileServerThread(client).start();
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+    }
+
+    private void iniciarDownloader() {
+        while (true) {
+            String arquivoAlvo = getNomeArquivoAlvo();
+            if (arquivoAlvo != null) {
+                new FileClientThread(arquivoAlvo).start();
             }
         }
     }
@@ -107,11 +115,11 @@ public class Peer {
         System.out.println("Digite o nome do arquivo (com extensão) que desaja baixar:");
                         
         try {
-            String nomeArquivo =  this.userInputReader.readLine();
+            String nomeArquivo =  this.leitorInputTeclado.readLine();
             
             while (!nomeArquivo.endsWith(".mp4")) {
                 System.out.println("Somente são aceitos arquivos de extensão .mp4");
-                nomeArquivo = this.userInputReader.readLine();
+                nomeArquivo = this.leitorInputTeclado.readLine();
             }
             
             return nomeArquivo;
@@ -120,16 +128,7 @@ public class Peer {
             return null;
         }        
     }
-    
-    private void runFileClientDownloader() {
-        while (true) {
-            String arquivoAlvo = getNomeArquivoAlvo();
-            if (arquivoAlvo != null) {
-                new FileClientThread(arquivoAlvo).start();
-            }
-        }
-    }
-   
+       
     /*
     * The class aims to enable multiple clients downloading from the same server concurrently on which
     * each thread is going to be responsible to talk to a client "privately"
@@ -153,18 +152,18 @@ public class Peer {
             
             if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
                 String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
-                String caminhoArquivoRequisitado = clientResourcesFilePath + nomeArquivo;
+                String caminhoArquivoRequisitado = caminhoPastaDownloadsCliente + nomeArquivo;
                 transferirArquivo(caminhoArquivoRequisitado); 
             }
         }
 
         private void transferirArquivo(String caminhoArquivoRequisitado) {
-            try (BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
-                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
-                byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
-                while (fileReader.read(packet) != -1) {
-                    fileWriter.write(packet);
-                    fileWriter.flush();
+            try (BufferedOutputStream escritorStream = new BufferedOutputStream(outputStream);
+                BufferedInputStream leitorArquivo = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
+                byte[] packet = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
+                while (leitorArquivo.read(packet) != -1) {
+                    escritorStream.write(packet);
+                    escritorStream.flush();
                 }   
             } catch (IOException e) {
                 e.printStackTrace();
@@ -180,7 +179,7 @@ public class Peer {
         private Socket socket;
         private InputStream inputStream;
         private OutputStream outputStream;
-        private DatagramSocket datagramSocket;
+        private DatagramSocket socketUDP;
         private String arquivoAlvo;
 
         public FileClientThread(String arquivoAlvo) {
@@ -209,7 +208,7 @@ public class Peer {
             }
         }
 
-        private void creatFileIfNotExists(File file) {
+        private void criarArquivoSeNaoExistir(File file) {
             try {
                 file.createNewFile();
             } catch (IOException e) {
@@ -224,21 +223,21 @@ public class Peer {
         }
 
         private void downloadArquivo() {
-            String writingFilePath = clientResourcesFilePath + this.arquivoAlvo;            
-            File file = new File(writingFilePath);
-            creatFileIfNotExists(file);
+            String caminhoEscritaArquivo = caminhoPastaDownloadsCliente + this.arquivoAlvo;            
+            File file = new File(caminhoEscritaArquivo);
+            criarArquivoSeNaoExistir(file);
 
-            try (BufferedInputStream fileReader = new BufferedInputStream(inputStream);
-                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file));){
+            try (BufferedInputStream arquivoLeitor = new BufferedInputStream(inputStream);
+                BufferedOutputStream escritorStream = new BufferedOutputStream(new FileOutputStream(file));){
 
-                byte[] data = new byte[FILE_TRANSFER_PACKET_SIZE];
+                byte[] data = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
                 
-                while (fileReader.read(data) != -1) {
-                    fileWriter.write(data);
-                    fileWriter.flush();
+                while (arquivoLeitor.read(data) != -1) {
+                    escritorStream.write(data);
+                    escritorStream.flush();
                 } 
                 
-                System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, clientResourcesFilePath));
+                System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
                 enviarRequisicaoUpdate();
                 
             } catch (IOException e) {
@@ -250,9 +249,9 @@ public class Peer {
             Mensagem update = new Mensagem("UPDATE");
             update.adicionarMensagem("arquivo", arquivoAlvo);
             update.adicionarMensagem("endereco", enderecoEscuta);
-            Mensagem.enviarMensagemUDP(update, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
+            Mensagem.enviarMensagemUDP(update, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
             
-            Mensagem updateOk = Mensagem.receberMensagemUDP(datagramSocket);
+            Mensagem updateOk = Mensagem.receberMensagemUDP(socketUDP);
         }
 
         private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
@@ -269,7 +268,7 @@ public class Peer {
 
         private Set<String> getPeersComArquivo(String arquivoAlvo) {
             try {
-                this.datagramSocket = new DatagramSocket();
+                this.socketUDP = new DatagramSocket();
                 requisicaoSearchPorPeers(arquivoAlvo);
                 Mensagem mensagemPeersComOArquivo = receberPeersComArquivo();
     
@@ -283,7 +282,7 @@ public class Peer {
         }
 
         private Mensagem receberPeersComArquivo() {
-            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(datagramSocket);
+            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(socketUDP);
             return mensagemPeersComOArquivo;
         }
 
@@ -291,26 +290,26 @@ public class Peer {
             Mensagem requisicaoPeers = new Mensagem("SEARCH");
             requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
             requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
-            Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, datagramSocket);
+            Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
         }
     }
 
     public static void main(String[] args) throws IOException {
         System.out.println("Digite o número da porta em que serão RECEBIDAS requisições:");
 
-        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        BufferedReader leitor = new BufferedReader(new InputStreamReader(System.in));
         
-        int port = Integer.parseInt(reader.readLine());
+        int porta = Integer.parseInt(leitor.readLine());
         
         System.out.println("Digite o endereço de IP em que serão RECEBIDAS requisições");
-        String ipAddress = reader.readLine();
+        String enderecoIP = leitor.readLine();
 
         System.out.println("Digite o nome do servidor:");
-        String clientName = reader.readLine();
+        String nomeCliente = leitor.readLine();
 
 
-        Peer peer = new Peer(port, ipAddress, clientName);
-        peer.startServer();
-        peer.startClientConsumer();;
+        Peer peer = new Peer(porta, enderecoIP, nomeCliente);
+        peer.iniciarThreadServidorCompartilhamento();
+        peer.iniciarThreadDownloader();;
     }
 }
