@@ -30,6 +30,7 @@ public class Peer {
 
     private ServerSocket servidor;
     private String enderecoIp;
+    private int porta;
 
     // @TODO: remove it and receive the path to the client's file folder
     private String nomeCliente;
@@ -60,6 +61,7 @@ public class Peer {
      */
     public Peer(int porta, String enderecoIp, String nomeCliente) throws IOException {
         this.servidor = new ServerSocket(porta);
+        this.porta = porta;
         this.enderecoIp = enderecoIp;
         this.nomeCliente = nomeCliente.toLowerCase();
         this.caminhoPastaDownloadsCliente = CAMINHO_BASE_DOWNLOAD + this.nomeCliente + "/";
@@ -368,6 +370,59 @@ public class Peer {
         }
     }
 
+
+    //@TODO: FAZER AS MESMAS TAREFAS DO CONSTRUTOR, pastas etc
+    private void tratarJoin() {
+        try {
+            System.out.println("Digite o IP:");
+            String enderecoIp = leitorInputTeclado.readLine();
+            this.enderecoIp = enderecoIp;
+
+            System.out.println("Digite a porta:");
+            int porta = Integer.parseInt(leitorInputTeclado.readLine());
+            this.porta = porta;            
+
+            System.out.println("Digite a pasta do arquivo:");
+            String pastaArquivos = leitorInputTeclado.readLine();
+            this.nomeCliente = pastaArquivos;
+
+            joinServidor();
+        } catch (IOException e) {
+            System.err.println("Erro na captura da opção, tente novamente");
+        }
+
+    }
+
+    private void direcionarEscolhaUsuario(String escolhaUsuario) {
+        switch (escolhaUsuario) {
+            case "JOIN":
+                tratarJoin();
+                break;
+            case "SEARCH":
+                break;
+            case "DOWNLOAD":
+                break;
+            default:
+                System.out.println("Opção não disponível");
+                break;
+        }
+    }
+
+    public void rodarMenuIterativo() {
+        while (true) {
+            System.out.println("Escolha uma das opções");
+            System.out.println("JOIN \nSEARCH \nDOWNLOAD");
+            try {
+                String escolhaUsuario = leitorInputTeclado.readLine();
+                direcionarEscolhaUsuario(escolhaUsuario);
+            } catch (IOException e) {
+                System.err.println("Erro na captura da opção, tente novamente");
+            }
+
+        }
+
+    }    
+
     public static void main(String[] args) throws IOException {
         System.out.println("Digite o número da porta em que serão RECEBIDAS requisições:");
 
@@ -380,6 +435,7 @@ public class Peer {
 
         System.out.println("Digite o nome do servidor:");
         String nomeCliente = leitor.readLine();
+
 
 
         Peer peer = new Peer(porta, enderecoIP, nomeCliente);

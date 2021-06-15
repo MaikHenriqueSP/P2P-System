@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- *  Classe responsável por coordenar o compartilhamento de arquivos entre Peers
+ * Classe responsável por coordenar o compartilhamento de arquivos entre Peers
  * 
  * @author Maik Henrique
  */
