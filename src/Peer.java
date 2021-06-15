@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.xml.crypto.Data;
+
 /**
  * Classe atua como distribuídora dos arquivos que possuí e também realiza downloads de arquivos
  * conforme requisições do usuário.
@@ -48,7 +50,7 @@ public class Peer {
     private final Thread clienteThread = new Thread(() -> iniciarDownloader());    
 
     private final BufferedReader leitorInputTeclado;
-    private final String enderecoEscuta;    
+    private String enderecoEscuta;    
 
     /**
      * Cada Peer se torna disponível para compartilhamento de seus arquivos e para efetuar downloads somente
@@ -109,8 +111,7 @@ public class Peer {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n %s", this.enderecoEscuta, this.arquivosDisponiveis));
             }
         } catch (SocketException e) {
-            e.printStackTrace();
-            
+            e.printStackTrace();            
         }
     }
 
@@ -166,6 +167,51 @@ public class Peer {
         }        
     }
        
+    /**
+     * Orquestra a requisição SEARCH com o servidor, criando um socket UDP para o envio da mensagem e posteriormente
+     * esperando pela resposta do servidor pelo conjunto de Peers com o arquivo.
+     * 
+     * @TODO: Lida com edge cases, como quando o servidor não responde
+     * 
+     * @param arquivoAlvo
+     * @return conjunto de endereço dos Peers com o arquivo requerido.
+     */
+    private Set<String> getPeersComArquivo(String arquivoAlvo) {
+        try (DatagramSocket socketUDP = new DatagramSocket()){
+            requisicaoSearchPorPeers(arquivoAlvo, socketUDP);
+            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(socketUDP);
+    
+            return getDadosPeer(mensagemPeersComOArquivo);
+        } catch (SocketException e) {
+            System.err.println(String.format("Ocorreu um erro ao tentar obter a lista de Peers com %s", arquivoAlvo));
+            return null;
+        }
+    }
+
+    /**
+     * Constrói e encaminha uma requisição SEARCH ao servidor via mensagem UDP, solicitando os Peers que possuem o arquivo alvo.
+     * @param arquivoAlvo nome do arquivo de vídeo que será requisitado ao servidor
+     * @param socketUDP instância de um socket UDP para envio da mensagem
+     */
+    private void requisicaoSearchPorPeers(String arquivoAlvo, DatagramSocket socketUDP) {
+        Mensagem requisicaoPeers = new Mensagem("SEARCH");
+        requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
+        requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
+        Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
+    }
+
+    private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
+        Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
+        String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
+        
+        if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof Set<?>) {
+            @SuppressWarnings("unchecked")
+            Set<String> conjuntPeersComArquivo = (Set<String>) mensagensArquivosPeer.get("lista_peers");
+            return conjuntPeersComArquivo;
+        }
+        return null;
+    }
+
     /**
      * Classe representante da thread que atua como compartilhadora de arquivos para outros Peers, atuando de forma concorrente.
      */
@@ -321,58 +367,10 @@ public class Peer {
             
             Mensagem updateOk = Mensagem.receberMensagemUDP(socketUDP);
         }
-
-        private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
-            Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
-            String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
-            
-            if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof Set<?>) {
-                @SuppressWarnings("unchecked")
-                Set<String> conjuntPeersComArquivo = (Set<String>) mensagensArquivosPeer.get("lista_peers");
-                return conjuntPeersComArquivo;
-            }
-            return null;
-        }
-
-        /**
-         * Orquestra a requisição SEARCH com o servidor, criando um socket UDP para o envio da mensagem e posteriormente
-         * esperando pela resposta do servidor pelo conjunto de Peers com o arquivo.
-         * 
-         * @TODO: Lida com edge cases, como quando o servidor não responde
-         * 
-         * @param arquivoAlvo
-         * @return conjunto de endereço dos Peers com o arquivo requerido.
-         */
-        private Set<String> getPeersComArquivo(String arquivoAlvo) {
-            try {
-                this.socketUDP = new DatagramSocket();
-                requisicaoSearchPorPeers(arquivoAlvo);
-                Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(socketUDP);
-    
-                return getDadosPeer(mensagemPeersComOArquivo);
-            } catch (SocketException e) {
-                e.printStackTrace();
-            }
-
-            return null;
-
-        }
-
-        /**
-         * Constrói e encaminha uma requisição SEARCH ao servidor via mensagem UDP, solicitando os Peers que possuem o arquivo alvo.
-         * @param arquivoAlvo
-         */
-        private void requisicaoSearchPorPeers(String arquivoAlvo) {
-            Mensagem requisicaoPeers = new Mensagem("SEARCH");
-            requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
-            requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
-            Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
-        }
     }
 
-
     //@TODO: FAZER AS MESMAS TAREFAS DO CONSTRUTOR, pastas etc
-    private void tratarJoin() {
+    private void tratarRequisicaoJoin() {
         try {
             System.out.println("Digite o IP:");
             String enderecoIp = leitorInputTeclado.readLine();
@@ -384,21 +382,45 @@ public class Peer {
 
             System.out.println("Digite a pasta do arquivo:");
             String pastaArquivos = leitorInputTeclado.readLine();
-            this.nomeCliente = pastaArquivos;
+            this.nomeCliente = pastaArquivos.toLowerCase();
 
+            //@TODO: refactor
+            this.servidor = new ServerSocket(porta); 
+            this.caminhoPastaDownloadsCliente = CAMINHO_BASE_DOWNLOAD + this.nomeCliente + "/";
+            File clienteFile = new File(caminhoPastaDownloadsCliente);
+            criarPastaSeNaoExistir(clienteFile);
+            this.arquivosDisponiveis = getListaNomesArquivosDeVideo(clienteFile); 
+            this.enderecoEscuta = enderecoIp + ":" + porta;           
+            
             joinServidor();
         } catch (IOException e) {
-            System.err.println("Erro na captura da opção, tente novamente");
+            System.err.println("Erro na captura, tente novamente");
         }
+    }
+    
+    private void tratarRequisicaoSearch() {
+        System.out.println("Digite o nome do arquivo que está procurando:");
+        try {
+            String arquivoAlvo = leitorInputTeclado.readLine();
+            while (!arquivoAlvo.endsWith(".mp4")) {
+                System.out.println("Só são permitidos arquivos de extensão .mp4");
+                arquivoAlvo = leitorInputTeclado.readLine();
+            }
+            Set<String> peersComArquivo = getPeersComArquivo(arquivoAlvo);
+            System.out.println(String.format("Peers com arquivo solicitado: \n%s", peersComArquivo));
 
+        } catch (IOException e) {
+            System.err.println("Erro na captura, tente novamente");
+        }
     }
 
     private void direcionarEscolhaUsuario(String escolhaUsuario) {
         switch (escolhaUsuario) {
             case "JOIN":
-                tratarJoin();
+            tratarRequisicaoJoin();
                 break;
             case "SEARCH":
+                tratarRequisicaoSearch();
                 break;
             case "DOWNLOAD":
                 break;
@@ -418,9 +440,7 @@ public class Peer {
             } catch (IOException e) {
                 System.err.println("Erro na captura da opção, tente novamente");
             }
-
         }
-
     }    
 
     public static void main(String[] args) throws IOException {
