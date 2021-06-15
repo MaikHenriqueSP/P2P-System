@@ -31,6 +31,7 @@ public class Peer {
     private ServerSocket servidor;
     private String enderecoIp;
     private int porta;
+    private boolean isCompartilhandoArquivos;
 
     // @TODO: remove it and receive the path to the client's file folder
     private String nomeCliente;
@@ -45,14 +46,16 @@ public class Peer {
     public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8; 
 
     /*
-    private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
     private final Thread clienteThread = new Thread(() -> iniciarDownloader());    
-*/
+    */
+    private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
+
     private final BufferedReader leitorInputTeclado;
     private String enderecoEscuta;    
 
     public Peer() {
         this.leitorInputTeclado = new BufferedReader(new InputStreamReader(System.in));
+        this.isCompartilhandoArquivos = false;
     }
 
     /**
@@ -83,7 +86,8 @@ public class Peer {
     }
 
     /**
-     * Efetua requisição JOIN ao servidor e aguarda por uma resposta.
+     * Efetua requisição JOIN ao servidor e caso receba JOIN_OK inicializa a thread para a atuação do Peer como um servidor de compartilhamento
+     * de arquivos.
      */
     private void joinServidor() {
         Mensagem mensagem = new Mensagem("JOIN");
@@ -94,11 +98,10 @@ public class Peer {
         try (DatagramSocket socketUDP = new DatagramSocket()){
             Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
             Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
-            System.out.println(respostaServidor);
-
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
-                iniciarServidorCompartilhamento();
+                servidorThread.start();
+                this.isCompartilhandoArquivos = true;
             }
         } catch (SocketException e) {
             e.printStackTrace();            
@@ -364,7 +367,7 @@ public class Peer {
             int porta = Integer.parseInt(leitorInputTeclado.readLine());
             this.porta = porta;            
 
-            System.out.println("Digite a pasta do arquivo:");
+            System.out.println("Digite o nome da pasta dos arquivos que deseja compartilhar:");
             String pastaArquivos = leitorInputTeclado.readLine();
             this.nomeCliente = pastaArquivos.toLowerCase();
 
@@ -392,7 +395,9 @@ public class Peer {
     private void direcionarEscolhaUsuario(String escolhaUsuario) {
         switch (escolhaUsuario) {
             case "JOIN":
-                tratarRequisicaoJoin();
+                if (!this.isCompartilhandoArquivos) {
+                    tratarRequisicaoJoin();
+                }
                 break;
             case "SEARCH":
                 tratarRequisicaoSearch();
@@ -408,7 +413,9 @@ public class Peer {
     public void rodarMenuIterativo() {
         while (true) {
             System.out.println("Escolha uma das opções:");
-            System.out.println("JOIN\tSEARCH\tDOWNLOAD");
+            String opcaoServidor = this.isCompartilhandoArquivos ? "LEAVE" : "JOIN" ;
+            System.out.println(String.format("%s\tSEARCH\tDOWNLOAD", opcaoServidor));
+            
             try {
                 String escolhaUsuario = leitorInputTeclado.readLine();
                 direcionarEscolhaUsuario(escolhaUsuario);
