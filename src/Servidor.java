@@ -132,8 +132,7 @@ public class Servidor implements AutoCloseable {
                 String arquivoRequisitado = (String) mensagens.get("arquivo_requistado");
                 String enderecoEscutaPeer = (String) mensagens.get("endereco");
                 
-                Set<String> peersPorArquivoRequisitado = mapaArquivosParaEnderecoPeers.get(arquivoRequisitado);
-                peersPorArquivoRequisitado = peersPorArquivoRequisitado != null ? peersPorArquivoRequisitado: new HashSet<>();
+                Set<String> peersPorArquivoRequisitado = mapaArquivosParaEnderecoPeers.getOrDefault(arquivoRequisitado,  new HashSet<>());
                 
                 System.out.println(String.format("Peer %s solicitou o arquivo %s", enderecoEscutaPeer, arquivoRequisitado));
 
