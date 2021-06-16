@@ -134,7 +134,7 @@ public class Peer {
     }
 
     private String getNomeArquivoAlvo() {
-        System.out.println("Digite o nome do arquivo (com extensão) que desaja baixar:");
+        System.out.println("Digite o nome do arquivo que está procurando:");
                         
         try {
             String nomeArquivo =  this.leitorInputTeclado.readLine();
@@ -410,6 +410,22 @@ public class Peer {
         }
     }
 
+    private void tratarRequisicaoLeave() {
+        try (DatagramSocket socketUDP = new DatagramSocket()){
+            Mensagem leave = new Mensagem("LEAVE");
+            leave.adicionarMensagem("endereco", this.enderecoEscuta);
+
+            Mensagem.enviarMensagemUDP(leave, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
+            Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
+            
+            if (respostaServidor.getTitulo().equals("LEAVE_OK")) {
+                System.out.println("Peer não compartilha mais seus arquivos para download");            
+            }
+        } catch (SocketException e) {
+            System.err.println("Não foi possível executar a requisição LEAVE, tente novamente.");            
+        }
+    }
+
     private void direcionarEscolhaUsuario(String escolhaUsuario) {
         switch (escolhaUsuario) {
             case "JOIN":
@@ -420,6 +436,9 @@ public class Peer {
                 break;
             case "DOWNLOAD":
                 tratarRequisicaoDownload();
+                break;
+            case "LEAVE":
+                tratarRequisicaoLeave();
                 break;
             default:
                 System.out.println("Opção não disponível");

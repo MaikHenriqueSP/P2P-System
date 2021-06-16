@@ -131,11 +131,14 @@ public class Servidor implements AutoCloseable {
             if (mensagens.get("arquivo_requistado") instanceof String ) {
                 String arquivoRequisitado = (String) mensagens.get("arquivo_requistado");
                 String enderecoEscutaPeer = (String) mensagens.get("endereco");
+                
                 Set<String> peersPorArquivoRequisitado = mapaArquivosParaEnderecoPeers.get(arquivoRequisitado);
-
+                peersPorArquivoRequisitado = peersPorArquivoRequisitado != null ? peersPorArquivoRequisitado: new HashSet<>();
+                
                 System.out.println(String.format("Peer %s solicitou o arquivo %s", enderecoEscutaPeer, arquivoRequisitado));
 
                 Mensagem mensagemResposta = new Mensagem("SEARCH_OK");
+
                 mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
                 Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", pacoteRecebido.getPort(), socketUDP);
             }
@@ -167,10 +170,11 @@ public class Servidor implements AutoCloseable {
                 });
 
                 mapaEnderecoPeersParaArquivos.remove(endereco);
+
+                Mensagem leaveOK = new Mensagem("LEAVE_OK");
+                Mensagem.enviarMensagemUDP(leaveOK, "localhost", pacoteRecebido.getPort(), socketUDP);
             }
 
-            Mensagem leaveOK = new Mensagem("LEAVE_OK");
-            Mensagem.enviarMensagemUDP(leaveOK, "localhost", pacoteRecebido.getPort(), socketUDP);
 
         }
 
