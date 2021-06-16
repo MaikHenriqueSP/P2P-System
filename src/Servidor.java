@@ -86,7 +86,7 @@ public class Servidor implements AutoCloseable {
                     procurarArquivo(mensagem);                
                     break;
                 case "LEAVE":
-                    removerPeer();
+                    removerPeer(mensagem);
                     break;
                 case "UPDATE":
                     atualizarPeer(mensagem);
@@ -143,9 +143,35 @@ public class Servidor implements AutoCloseable {
         }
 
         /**
-         * Lida com requisições do tipo LEAVE
+         *  Lida com requisições do tipo LEAVE, removendo o mapeamento do peer para seus arquivos e
+         * dos arquivos do peer para seu endereço (mapeamento bi-direcional).
+         * 
+         * @param mensagem mensagem recebida do pear que deseja se desligar da rede
          */
-        private void removerPeer() {
+        private void removerPeer(Mensagem mensagem) {
+            Map<String, Object> mensagens = mensagem.getMensagens();
+
+            if (mensagens.get("endereco") instanceof String) {
+                String endereco = (String) mensagens.get("endereco");
+                Set<String> arquivosDoPeer = mapaEnderecoPeersParaArquivos.get(endereco);
+                
+                arquivosDoPeer.parallelStream().forEach(arquivoDoPeer -> {
+                    Set<String> enderecosPorArquivo = mapaArquivosParaEnderecoPeers.get(arquivoDoPeer);
+                    enderecosPorArquivo.remove(endereco);
+
+                    if (enderecosPorArquivo.size() == 0) {
+                        mapaArquivosParaEnderecoPeers.remove(arquivoDoPeer);
+                    } else {
+                        mapaArquivosParaEnderecoPeers.put(arquivoDoPeer, enderecosPorArquivo);
+                    }
+                });
+
+                mapaEnderecoPeersParaArquivos.remove(endereco);
+            }
+
+            Mensagem leaveOK = new Mensagem("LEAVE_OK");
+            Mensagem.enviarMensagemUDP(leaveOK, "localhost", pacoteRecebido.getPort(), socketUDP);
+
         }
 
         /**
