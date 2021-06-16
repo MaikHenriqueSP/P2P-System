@@ -4,11 +4,11 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -26,8 +26,8 @@ public class Servidor implements AutoCloseable {
     
     public Servidor() throws IOException {
         this.socketUDP = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
-        this.mapaEnderecoPeersParaArquivos = new HashMap<>();
-        this.mapaArquivosParaEnderecoPeers = new HashMap<>();
+        this.mapaEnderecoPeersParaArquivos = new ConcurrentHashMap<>();
+        this.mapaArquivosParaEnderecoPeers = new ConcurrentHashMap<>();
     }
 
     /**
