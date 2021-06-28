@@ -46,7 +46,7 @@ public class Peer {
     private Set<String> peersComArquivos;
     private String ultimoArquivoPesquisado;
 
-    private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
+    //private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
 
     private final BufferedReader leitorInputTeclado;
     private String enderecoEscuta;    
@@ -57,7 +57,7 @@ public class Peer {
         configurarPeer();
     }
 
-        /**
+    /**
      * 
      * @throws IOException caso a configuração do Peer não seja bem sucedida, lança uma exceção de modo que deve ser interrompida a criação do Peer.
      */
@@ -95,7 +95,8 @@ public class Peer {
             Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
-                servidorThread.start();
+                //servidorThread.start();
+                new ServidorCompartilhamentOuvinte().start();
                 this.isCompartilhandoArquivos = true;
             }
         } catch (SocketException e) {
@@ -106,17 +107,24 @@ public class Peer {
     /**
      * Ouvinte de conexões TCP, assim quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.
      */
-    private void iniciarServidorCompartilhamento() {
-        while (true) {
-            try {
-                Socket client = servidor.accept();    
-                new FileServerThread(client).start();
-            } catch (IOException e) {
-                e.printStackTrace();
+    public class ServidorCompartilhamentOuvinte extends Thread {
+
+        @Override
+        public void run() {
+            while (isCompartilhandoArquivos) {
+                try {
+                    Socket client = servidor.accept();    
+                    new FileServerThread(client).start();
+                } catch (SocketException e) {
+                    System.out.println("Desligando servidor de compartilhamento de arquivos");
+                } catch (IOException  e) {
+                    e.printStackTrace();
+                    break;
+                }
             }
-        }
+        }       
     }
-    
+   
     /**
      * A cada arquivo que é solicitado pelo usuário, delega uma nova thread responsável por lidar com o download do arquivo. 
      */
@@ -410,6 +418,15 @@ public class Peer {
         }
     }
 
+    private void pararCompartilhamentoDeArquivos() {
+        try {
+            this.servidor.close();
+            this.isCompartilhandoArquivos = false;
+        } catch (IOException e) {
+            System.out.println("Ocorreu um erro durante a tentativa de parada de compartilhamento de arquivos, tente novamente!");
+        }
+    }
+
     private void tratarRequisicaoLeave() {
         try (DatagramSocket socketUDP = new DatagramSocket()){
             Mensagem leave = new Mensagem("LEAVE");
@@ -419,7 +436,8 @@ public class Peer {
             Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
             
             if (respostaServidor.getTitulo().equals("LEAVE_OK")) {
-                System.out.println("Peer não compartilha mais seus arquivos para download");            
+                System.out.println("Peer não compartilha mais seus arquivos para download");                       
+                pararCompartilhamentoDeArquivos();
             }
         } catch (SocketException e) {
             System.err.println("Não foi possível executar a requisição LEAVE, tente novamente.");            

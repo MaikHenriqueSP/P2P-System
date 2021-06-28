@@ -141,7 +141,6 @@ public class Servidor implements AutoCloseable {
                 mensagemResposta.adicionarMensagem("lista_peers", peersPorArquivoRequisitado);
                 Mensagem.enviarMensagemUDP(mensagemResposta, "localhost", pacoteRecebido.getPort(), socketUDP);
             }
-
         }
 
         /**
