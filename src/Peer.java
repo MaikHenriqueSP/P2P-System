@@ -46,8 +46,6 @@ public class Peer {
     private Set<String> peersComArquivos;
     private String ultimoArquivoPesquisado;
 
-    //private final Thread servidorThread = new Thread(() -> iniciarServidorCompartilhamento());
-
     private final BufferedReader leitorInputTeclado;
     private String enderecoEscuta;    
 
@@ -95,8 +93,7 @@ public class Peer {
             Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
-                //servidorThread.start();
-                new ServidorCompartilhamentOuvinte().start();
+                iniciarServidorOuvinteDeCompartilhamento();
                 this.isCompartilhandoArquivos = true;
             }
         } catch (SocketException e) {
@@ -123,6 +120,13 @@ public class Peer {
                 }
             }
         }       
+    }
+
+    /**
+     * Inicializa uma Thread que será ouvinte por download de arquivos de forma concorrente.
+     */
+    private void iniciarServidorOuvinteDeCompartilhamento() {
+        new ServidorCompartilhamentOuvinte().start();
     }
    
     /**
@@ -435,8 +439,7 @@ public class Peer {
             Mensagem.enviarMensagemUDP(leave, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
             Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
             
-            if (respostaServidor.getTitulo().equals("LEAVE_OK")) {
-                System.out.println("Peer não compartilha mais seus arquivos para download");                       
+            if (respostaServidor.getTitulo().equals("LEAVE_OK")) {                       
                 pararCompartilhamentoDeArquivos();
             }
         } catch (SocketException e) {
