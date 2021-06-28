@@ -133,6 +133,15 @@ public class Mensagem implements Serializable {
         return null;
     }
 
+    public static Mensagem deserializarBytes(byte[] bytes) throws IOException, ClassNotFoundException {
+        ByteArrayInputStream byteStream = new ByteArrayInputStream(bytes);
+        ObjectInputStream objectStream = new ObjectInputStream(byteStream);
+        Mensagem mensagem =  (Mensagem) objectStream.readObject();
+        objectStream.close();
+        
+        return mensagem;
+    }
+
     @Override
     public String toString() {
         return "Mensagem [mensagens=" + mensagens + ", titulo=" + titulo + "]";
