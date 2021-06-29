@@ -14,10 +14,12 @@ import java.net.DatagramSocket;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -282,12 +284,17 @@ public class Peer {
         private InputStream inputStream;
         private OutputStream outputStream;
         private String arquivoAlvo;
-        private Set<String> peersComAOrquivoAlvo;
+        private List<String> listaPeersComArquivoAlvo;
         private String enderecoPeerPrioritario;
 
         public FileClientThread(String arquivoAlvo, Set<String> peersComAOrquivoAlvo, String enderecoPeerPrioritario) {
             this.arquivoAlvo = arquivoAlvo;
-            this.peersComAOrquivoAlvo = peersComAOrquivoAlvo;
+            this.listaPeersComArquivoAlvo = new ArrayList<>(peersComAOrquivoAlvo);
+
+            if (!listaPeersComArquivoAlvo.get(0).equals(enderecoPeerPrioritario)) {
+                listaPeersComArquivoAlvo.add(0, enderecoPeerPrioritario);
+            }
+
             this.enderecoPeerPrioritario = enderecoPeerPrioritario;
         }
 
@@ -298,20 +305,55 @@ public class Peer {
          */
         @Override
         public void run() {
-            estabelecerConexao();
-            combinarArquivoParaDownload();            
-            downloadArquivo();
+            boolean isDownloadBemSucedido = false;
+
+            for (int i = 0; !isDownloadBemSucedido; i++) {
+                i = i % this.listaPeersComArquivoAlvo.size();
+                
+                String enderecoPeerAlvo = listaPeersComArquivoAlvo.get(i);
+                System.out.println(String.format("Pedindo agora para o peer %s.", enderecoPeerAlvo));
+
+                estabelecerConexao(enderecoPeerAlvo);
+                combinarArquivoParaDownload();            
+                isDownloadBemSucedido = downloadArquivo();
+
+                if(!isDownloadBemSucedido) {
+                    desligarSocket();
+                    pausarExecucao();
+                    System.out.print(String.format("Peer %s negou o download. ", enderecoPeerAlvo));
+                }            
+            }   
+            
+            System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
+        }
+        
+        private void pausarExecucao() {
+            try {
+                TimeUnit.SECONDS.sleep(5);
+            } catch (InterruptedException e) {
+                System.out.println("Ocorreu um erro durante o intervalo");
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private void desligarSocket()  {
+            if (this.socket != null && this.socket.isConnected()) {
+                try {
+                    this.socket.close();                
+                } catch (IOException e) {                    
+                    System.out.println("Ocorreu um erro durante o download, finalizando execução do Downloader.");
+                    e.printStackTrace();              
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
 
         /**
          * Estabelece conexão TCP com um Peer e instancia os streams necessários para a transferência de dados.        
          */
-        private void estabelecerConexao() {
+        private void estabelecerConexao(String enderecoPeer) {
             try {
-
-                //@TODO: Implementar lógica para downloads negados
-                //String[] peerInfo = this.peersComAOrquivoAlvo.stream().findFirst().get().split(":");
-                String[] peerInfo = this.enderecoPeerPrioritario.split(":");
+                String[] peerInfo = enderecoPeer.split(":");
                 int porta = Integer.parseInt(peerInfo[1]);
 
                 this.socket = new Socket("localhost", porta);
@@ -346,9 +388,7 @@ public class Peer {
                     return false;
                 }
 
-                isTransferenciaBemSucedida = receberTransferenciaArquivo(entradaStream, data);
-                
-                System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
+                isTransferenciaBemSucedida = receberTransferenciaArquivo(entradaStream, data);                
                 enviarRequisicaoUpdate();
             } catch (IOException e) {
                 System.out.println("Não foi possível efetuar o download, tente novamente");                
