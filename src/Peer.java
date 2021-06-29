@@ -331,18 +331,11 @@ public class Peer {
             Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
         }
 
-        private void criarArquivoSeNaoExistir(File file) {
-            try {
-                file.createNewFile();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
         /**
          * Orquestra o download do arquivo, recebendo os bytes em pacotes e os escrevendo no arquivo.
          */
         private boolean downloadArquivo() {        
+            boolean isTransferenciaBemSucedida = false;
 
             try (BufferedInputStream entradaStream = new BufferedInputStream(inputStream);){                
                 byte[] data = new byte[TAMANHO_PACOTES_TRANSFERENCIA];                
@@ -353,21 +346,18 @@ public class Peer {
                     return false;
                 }
 
-                receberTransferenciaArquivo(entradaStream, data);
+                isTransferenciaBemSucedida = receberTransferenciaArquivo(entradaStream, data);
                 
                 System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
                 enviarRequisicaoUpdate();
-
-                return true;
             } catch (IOException e) {
                 System.out.println("Não foi possível efetuar o download, tente novamente");                
             } 
 
-            //@TODO: THROWS EXCEPTION, DO NOT RETURN FALSE
-            return false;
+            return isTransferenciaBemSucedida;
         }
 
-        private void receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data) {
+        private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data) {
             String caminhoEscritaArquivo = caminhoPastaDownloadsCliente + this.arquivoAlvo;            
             File file = new File(caminhoEscritaArquivo);
 
@@ -379,9 +369,11 @@ public class Peer {
                         
                 } while (arquivoLeitor.read(data) != -1);
 
+                return true;
             } catch(IOException e) {
-                System.out.println("Não foi possível efetuar o download, tente novamente");
+                System.out.println("Ocorreu um erro durante o recebimento do arquivo.");
             }
+            return false;
         }
 
         private boolean IsDownloadNegado(byte[] data) {
