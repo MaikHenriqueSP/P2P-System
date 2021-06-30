@@ -384,7 +384,6 @@ public class Peer {
                 entradaStream.read(data);
                 
                 if (IsDownloadNegado(data)) {
-                    System.out.println("Download negado");
                     return false;
                 }
 
