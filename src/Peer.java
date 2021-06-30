@@ -504,7 +504,7 @@ public class Peer {
         Set<String> peersComArquivo = getPeersComArquivo(arquivoAlvo);
 
         if (peersComArquivo == null) {
-            System.out.println("Não se obteve resposta do servidor, tente novamente mais tarde!");
+            System.out.println("Não se obteve resposta do servidor, tente novamente mais tarde.");
             return;
         }
 
@@ -544,12 +544,23 @@ public class Peer {
     }
 
     private void tratarRequisicaoLeave() {
-        try (DatagramSocket socketUDP = new DatagramSocket()){
-            Mensagem leave = new Mensagem("LEAVE");
-            leave.adicionarMensagem("endereco", this.enderecoEscuta);
+        if (!this.isCompartilhandoArquivos) {
+            System.out.println("O compartilhamento de arquivo já está desativado.");
+            return;
+        }
 
-            Mensagem.enviarMensagemUDP(leave, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
-            Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
+        try (DatagramSocket socketUDP = new DatagramSocket()){
+            socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
+            
+            Mensagem mensagemLeave = new Mensagem("LEAVE");
+            mensagemLeave.adicionarMensagem("endereco", this.enderecoEscuta);
+
+            Mensagem respostaServidor = controlarRecebimentoMensagemUDP(mensagemLeave, socketUDP);
+            
+            if (respostaServidor == null) {
+                System.out.println("Não foi obtida resposta do servidor, tente novamente mais tarde.");
+                return;
+            }
             
             if (respostaServidor.getTitulo().equals("LEAVE_OK")) {                       
                 pararCompartilhamentoDeArquivos();

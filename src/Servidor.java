@@ -154,26 +154,31 @@ public class Servidor implements AutoCloseable {
 
             if (mensagens.get("endereco") instanceof String) {
                 String endereco = (String) mensagens.get("endereco");
-                Set<String> arquivosDoPeer = mapaEnderecoPeersParaArquivos.get(endereco);
                 
-                arquivosDoPeer.parallelStream().forEach(arquivoDoPeer -> {
-                    Set<String> enderecosPorArquivo = mapaArquivosParaEnderecoPeers.get(arquivoDoPeer);
-                    enderecosPorArquivo.remove(endereco);
-
-                    if (enderecosPorArquivo.size() == 0) {
-                        mapaArquivosParaEnderecoPeers.remove(arquivoDoPeer);
-                    } else {
-                        mapaArquivosParaEnderecoPeers.put(arquivoDoPeer, enderecosPorArquivo);
-                    }
-                });
-
+                removerArquivosDoPeer(endereco);                
                 mapaEnderecoPeersParaArquivos.remove(endereco);
 
                 Mensagem leaveOK = new Mensagem("LEAVE_OK");
                 Mensagem.enviarMensagemUDP(leaveOK, "localhost", pacoteRecebido.getPort(), socketUDP);
             }
+        }
 
+        private void removerArquivosDoPeer(String endereco) {
+            Set<String> arquivosDoPeer = mapaEnderecoPeersParaArquivos.get(endereco);
+            if (arquivosDoPeer == null){
+                return;
+            }
 
+            arquivosDoPeer.parallelStream().forEach(arquivoDoPeer -> {
+                Set<String> enderecosPorArquivo = mapaArquivosParaEnderecoPeers.get(arquivoDoPeer);
+                enderecosPorArquivo.remove(endereco);
+
+                if (enderecosPorArquivo.size() == 0) {
+                    mapaArquivosParaEnderecoPeers.remove(arquivoDoPeer);
+                } else {
+                    mapaArquivosParaEnderecoPeers.put(arquivoDoPeer, enderecosPorArquivo);
+                }
+            });            
         }
 
         /**
