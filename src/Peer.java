@@ -16,6 +16,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -205,26 +206,27 @@ public class Peer {
      */
     private Set<String> getPeersComArquivo(String arquivoAlvo) {
         try (DatagramSocket socketUDP = new DatagramSocket()){
-            requisicaoSearchPorPeers(arquivoAlvo, socketUDP);
-            Mensagem mensagemPeersComOArquivo = Mensagem.receberMensagemUDP(socketUDP);
+            socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
+
+            Mensagem mensagemSearch = mensagemSearchPorPeers(arquivoAlvo, socketUDP);
+            Mensagem mensagemPeersComOArquivo = controlarRecebimentoMensagemUDP(mensagemSearch, socketUDP);
     
-            return getDadosPeer(mensagemPeersComOArquivo);
+            return mensagemPeersComOArquivo == null ? null : getDadosPeer(mensagemPeersComOArquivo);
         } catch (SocketException e) {
-            System.err.println(String.format("Ocorreu um erro ao tentar obter a lista de Peers com %s", arquivoAlvo));
-            return null;
+            return new HashSet<>();
         }
     }
 
     /**
-     * Constrói e encaminha uma requisição SEARCH ao servidor via mensagem UDP, solicitando os Peers que possuem o arquivo alvo.
+     * Constrói e retorna uma mensagem SEARCH, solicitando os Peers que possuem o arquivo alvo.
      * @param arquivoAlvo nome do arquivo de vídeo que será requisitado ao servidor
      * @param socketUDP instância de um socket UDP para envio da mensagem
      */
-    private void requisicaoSearchPorPeers(String arquivoAlvo, DatagramSocket socketUDP) {
+    private Mensagem mensagemSearchPorPeers(String arquivoAlvo, DatagramSocket socketUDP) {
         Mensagem requisicaoPeers = new Mensagem("SEARCH");
         requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
         requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
-        Mensagem.enviarMensagemUDP(requisicaoPeers, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
+        return requisicaoPeers;
     }
 
     private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
@@ -236,7 +238,7 @@ public class Peer {
             Set<String> conjuntPeersComArquivo = (Set<String>) mensagensArquivosPeer.get("lista_peers");
             return conjuntPeersComArquivo;
         }
-        return null;
+        return new HashSet<>();
     }
 
     /**
@@ -498,8 +500,13 @@ public class Peer {
     
     private void tratarRequisicaoSearch() {
         String arquivoAlvo = getNomeArquivoAlvo();        
-        Set<String> peersComArquivo = getPeersComArquivo(arquivoAlvo);
         this.ultimoArquivoPesquisado = arquivoAlvo;
+        Set<String> peersComArquivo = getPeersComArquivo(arquivoAlvo);
+
+        if (peersComArquivo == null) {
+            System.out.println("Não se obteve resposta do servidor, tente novamente mais tarde!");
+            return;
+        }
 
         if (peersComArquivo.size() > 0){
             this.peersComArquivos = peersComArquivo;
