@@ -52,6 +52,9 @@ public class Peer {
     private final BufferedReader leitorInputTeclado;
     private String enderecoEscuta;
 
+    private static int TEMPO_ESPERA_RESPOSTA_UDP = (int)TimeUnit.SECONDS.toMillis(2);
+    private static int NUMERO_MAXIMO_REQUISICOES = 5;
+
     public Peer() throws IOException {
         this.leitorInputTeclado = new BufferedReader(new InputStreamReader(System.in));
         this.isCompartilhandoArquivos = false;
@@ -86,23 +89,48 @@ public class Peer {
      * de arquivos.
      */
     private void joinServidor() {
-        Mensagem mensagem = new Mensagem("JOIN");
+        Mensagem mensagemJoin = new Mensagem("JOIN");
 
-        mensagem.adicionarMensagem("arquivos", this.arquivosDisponiveis);
-        mensagem.adicionarMensagem("endereco", this.enderecoEscuta);
+        mensagemJoin.adicionarMensagem("arquivos", this.arquivosDisponiveis);
+        mensagemJoin.adicionarMensagem("endereco", this.enderecoEscuta);
 
         try (DatagramSocket socketUDP = new DatagramSocket()){
-            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
-            Mensagem respostaServidor = Mensagem.receberMensagemUDP(socketUDP);
+            socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
+
+            Mensagem respostaServidor = controlarRecebimentoMensagemUDP(mensagemJoin, socketUDP);
+
+            if (respostaServidor == null) {
+                System.out.println("Não se obteve sucesso durante as requisições ao servidor, tente novamente mais tarde.");
+                return;
+            }
+
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
                 iniciarServidorOuvinteDeCompartilhamento();
                 this.isCompartilhandoArquivos = true;
-            }
+            } 
         } catch (SocketException e) {
             e.printStackTrace();            
         }
     }
+
+    public Mensagem controlarRecebimentoMensagemUDP(Mensagem mensagem, DatagramSocket socketUDP) {
+        Mensagem respostaServidor = null;
+        int contadorRequisicoes = 0;
+
+        while (respostaServidor == null && contadorRequisicoes != NUMERO_MAXIMO_REQUISICOES) {
+            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);                
+            respostaServidor = Mensagem.receberMensagemUDP(socketUDP);                
+            contadorRequisicoes++;
+        }
+
+        if (respostaServidor == null && contadorRequisicoes == NUMERO_MAXIMO_REQUISICOES) {
+            return null;
+        }
+
+        return respostaServidor;
+    }
+    
 
     /**
      * Ouvinte de conexões TCP, assim quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.

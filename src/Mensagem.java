@@ -117,20 +117,19 @@ public class Mensagem implements Serializable {
     public static Mensagem receberMensagemUDP(DatagramSocket socketUDP) {
         byte[] bytesRecebidos = new byte[8 * 1024];
         DatagramPacket pacote = new DatagramPacket(bytesRecebidos, bytesRecebidos.length);
+
         try {
             socketUDP.receive(pacote);
         } catch (IOException e1) {
-            e1.printStackTrace();
+            return null;
         }
         
         try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(pacote.getData());
             ObjectInputStream inputObject = new ObjectInputStream(new BufferedInputStream(byteArrayInputStream));) {            
             return (Mensagem) inputObject.readObject();
         } catch (ClassNotFoundException | IOException e) {
-            e.printStackTrace();
+            return null;
         }
-
-        return null;
     }
 
     public static Mensagem deserializarBytes(byte[] bytes) throws IOException, ClassNotFoundException {
