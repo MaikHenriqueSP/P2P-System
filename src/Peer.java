@@ -154,7 +154,9 @@ public class Peer implements AutoCloseable {
      * A cada arquivo que é solicitado pelo usuário, delega uma nova thread responsável por lidar com o download do arquivo. 
      */
     private void iniciarDownloader(String enderecoPeerPrioritario) {
-        new FileClientThread(this.ultimoArquivoPesquisado, this.peersComArquivos, enderecoPeerPrioritario).start();            
+        if (!enderecoPeerPrioritario.isEmpty()) {
+            new FileClientThread(this.ultimoArquivoPesquisado, this.peersComArquivos, enderecoPeerPrioritario).start();            
+        }
      }
     
 
@@ -507,21 +509,40 @@ public class Peer implements AutoCloseable {
 
     private void tratarRequisicaoDownload() {
         
-        try {            
-            if (this.ultimoArquivoPesquisado != null) {
-                System.out.println("Digite o ip do Peer:");
-                String enderecoIp = this.leitorInputTeclado.readLine();
-                System.out.println("Digite a porta do Peer:");
-                String porta = this.leitorInputTeclado.readLine();
-                String enderecoPeerPrioritario = enderecoIp + ":" + porta;
-                
-                iniciarDownloader(enderecoPeerPrioritario);
-            } else {
+        try {
+            if (this.ultimoArquivoPesquisado == null) {
                 System.out.println("É necessário fazer uma requisição SEARCH antes de efetuar um DOWNLOAD");
+                return;
             }
+
+            if (this.peersComArquivos == null || this.peersComArquivos.size() == 0) {
+                System.out.println("Não há peers com o arquivo.");
+                return;
+            }
+            
+            String enderecoPeerPrioritario = getEnderecoPeerPrioritario();
+            iniciarDownloader(enderecoPeerPrioritario);
         } catch (IOException e) {
             System.err.println("Ocorreu um erro durante a requisição de download, tente novamente.");
         }
+    }
+
+    private String getEnderecoPeerPrioritario() throws IOException {
+        String enderecoPeerPrioritario = "";
+        
+        do {
+            System.out.println("Entre o endereço de um peer que possui o arquivo alvo e que está na lista encontrada durante o SEARCH");
+            
+            System.out.println("Digite o ip do Peer:");
+            String enderecoIp = this.leitorInputTeclado.readLine();
+            
+            System.out.println("Digite a porta do Peer:");
+            String porta = this.leitorInputTeclado.readLine();
+
+            enderecoPeerPrioritario = enderecoIp + ":" + porta;
+        } while (!this.peersComArquivos.contains(enderecoPeerPrioritario));
+
+        return enderecoPeerPrioritario;
     }
 
     private void pararCompartilhamentoDeArquivos() {
@@ -539,7 +560,7 @@ public class Peer implements AutoCloseable {
             return;
         }
 
-        try (DatagramSocket socketUDP = new DatagramSocket()){
+        try (DatagramSocket socketUDP = new DatagramSocket()) {
             socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
             
             Mensagem mensagemLeave = new Mensagem("LEAVE");
