@@ -1,2 +1,4 @@
 src/client/*
 *.class
+ServidorTester.java
+*.mp4

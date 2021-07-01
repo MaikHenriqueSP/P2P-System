@@ -1,187 +1,627 @@
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.List;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class Peer {
+/**
+ * Classe atua como distribuídora dos arquivos que possuí e também realiza downloads de arquivos
+ * conforme requisições do usuário.
+ * 
+ * @author Maik Henrique
+ */
+public class Peer implements AutoCloseable {
 
-    private ServerSocket server;
-    private String clientName;
-    private static final String BASE_CLIENT_FOLDER_PATH = "client/resource/";
-    private String clientResourcesFilePath;
-    private List<String> filesAvailable;
-    public static final int FILE_TRANSFER_PACKET_SIZE = 1024 * 8;
+    private ServerSocket servidor;
+    private String enderecoIp;
+    private int porta;
+    private boolean isCompartilhandoArquivos;
+
+    // @TODO: remove it and receive the path to the client's file folder
+    private String nomeCliente;
+
+    private static final String CAMINHO_BASE_DOWNLOAD = "client/resource/";
+    private String caminhoPastaDownloadsCliente;
+    private List<String> arquivosDisponiveis;
     
-    private final Thread serverThread = new Thread(() -> runFilesShareServer());
-    private final Thread clientConsumerThread = new Thread(() -> runFileClientDownloader());    
+    /**
+     *  Define o tamanho padrão dos pacotes para transferência, sendo padronizados em 8 kbytes.
+     */
+    public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8;
+    private Set<String> peersComArquivos;
+    private String ultimoArquivoPesquisado;
 
-    public Peer(int port, String clientName) throws IOException {
-        this.server = new ServerSocket(port);
-        this.clientName = clientName;
-        this.clientResourcesFilePath = BASE_CLIENT_FOLDER_PATH + clientName + "/";
+    private final BufferedReader leitorInputTeclado;
+    private String enderecoEscuta;
 
-        File clientFile = new File(clientResourcesFilePath);
+    private static int TEMPO_ESPERA_RESPOSTA_UDP = (int)TimeUnit.SECONDS.toMillis(2);
+    private static int NUMERO_MAXIMO_REQUISICOES = 5;
 
-        createClientFolderIfNotExists(clientFile);
-
-        this.filesAvailable = Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
+    public Peer() throws IOException {
+        this.leitorInputTeclado = new BufferedReader(new InputStreamReader(System.in));
+        this.isCompartilhandoArquivos = false;
+        configurarPeer();
     }
 
-    
-    private void createClientFolderIfNotExists(File clientFile) {
-        clientFile.mkdirs();
+    @Override
+    public void close() throws IOException {
+        if (this.servidor != null) {
+            this.servidor.close();
+        }        
+    }    
+
+    /**
+     * 
+     * @throws IOException caso a configuração do Peer não seja bem sucedida, lança uma exceção de modo que deve ser interrompida a criação do Peer.
+     */
+    private void configurarPeer() throws IOException {
+        System.out.println("Digite o IP:");
+        String enderecoIp = leitorInputTeclado.readLine();
+        this.enderecoIp = enderecoIp;
+
+        System.out.println("Digite a porta:");
+        int porta = Integer.parseInt(leitorInputTeclado.readLine());
+        this.porta = porta;            
+
+        System.out.println("Digite o nome da pasta dos arquivos que deseja compartilhar:");
+        String pastaArquivos = leitorInputTeclado.readLine();
+        this.nomeCliente = pastaArquivos.toLowerCase();
+
+        this.enderecoEscuta = enderecoIp + ":" + porta;
+        this.caminhoPastaDownloadsCliente = CAMINHO_BASE_DOWNLOAD + this.nomeCliente + "/";
+        File clienteFile = new File(caminhoPastaDownloadsCliente);
+        criarPastaSeNaoExistir(clienteFile);
     }
-    
-    public void startServer() {
-        serverThread.start();
-    }
-    
-    public void startClientConsumer() {
-        clientConsumerThread.start();
-    }  
-    
-    private void runFilesShareServer() {
-        while (true) {
-            try {
-                Socket client = server.accept();    
-                new FileServerThread(client).start();
-            } catch (IOException e) {
-                e.printStackTrace();
+
+    /**
+     * Efetua requisição JOIN ao servidor e caso receba JOIN_OK inicializa a thread para a atuação do Peer como um servidor de compartilhamento
+     * de arquivos.
+     */
+    private void joinServidor() {
+        Mensagem mensagemJoin = new Mensagem("JOIN");
+
+        mensagemJoin.adicionarMensagem("arquivos", this.arquivosDisponiveis);
+        mensagemJoin.adicionarMensagem("endereco", this.enderecoEscuta);
+
+        try (DatagramSocket socketUDP = new DatagramSocket()){
+            socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
+
+            Mensagem respostaServidor = controlarRecebimentoMensagemUDP(mensagemJoin, socketUDP);
+
+            if (respostaServidor == null) {
+                System.out.println("Não se obteve sucesso durante as requisições ao servidor, tente novamente mais tarde.");
+                return;
             }
+
+            if (respostaServidor.getTitulo().equals("JOIN_OK")) {
+                System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
+                iniciarServidorOuvinteDeCompartilhamento();
+                this.isCompartilhandoArquivos = true;
+            } 
+        } catch (SocketException e) {
+            e.printStackTrace();            
         }
     }
-    
-    private void runFileClientDownloader() {
-        while (true) {
-            System.out.println("-- DO YOU WANT TO DOWNLOAD A FILE? (Y/N)");
-            System.out.println("-- TYPE IN THE SERVER'S PORT THAT YOU WANT TO DOWNLOAD THE FILE FROM");
-            BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
 
-            try {
-                int port = Integer.parseInt(inputReader.readLine());
-                new FileClientThread("localhost", port).start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+    public Mensagem controlarRecebimentoMensagemUDP(Mensagem mensagem, DatagramSocket socketUDP) {
+        Mensagem respostaServidor = null;
+        int contadorRequisicoes = 0;
+
+        while (respostaServidor == null && contadorRequisicoes != NUMERO_MAXIMO_REQUISICOES) {
+            Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);                
+            respostaServidor = Mensagem.receberMensagemUDP(socketUDP);                
+            contadorRequisicoes++;
         }
+
+        if (respostaServidor == null && contadorRequisicoes == NUMERO_MAXIMO_REQUISICOES) {
+            return null;
+        }
+
+        return respostaServidor;
     }
     
-    /*
-    * The class aims to enable multiple clients downloading from the same server concurrently on which
-    * each thread is going to be responsible to talk to a client "privately"
-    */
+
+    /**
+     * Ouvinte de conexões TCP, assim quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.
+     */
+    public class ServidorCompartilhamentOuvinte extends Thread {
+
+        @Override
+        public void run() {
+            while (isCompartilhandoArquivos) {
+                try {
+                    Socket client = servidor.accept();    
+                    new FileServerThread(client).start();
+                } catch (SocketException e) {
+                    System.out.println("Desligando servidor de compartilhamento de arquivos");
+                } catch (IOException  e) {
+                    e.printStackTrace();
+                    break;
+                }
+            }
+        }       
+    }
+
+    /**
+     * Inicializa uma Thread que será ouvinte por download de arquivos de forma concorrente.
+     */
+    private void iniciarServidorOuvinteDeCompartilhamento() {
+        new ServidorCompartilhamentOuvinte().start();
+    }
+   
+    /**
+     * A cada arquivo que é solicitado pelo usuário, delega uma nova thread responsável por lidar com o download do arquivo. 
+     */
+    private void iniciarDownloader(String enderecoPeerPrioritario) {
+        if (!enderecoPeerPrioritario.isEmpty()) {
+            new FileClientThread(this.ultimoArquivoPesquisado, this.peersComArquivos, enderecoPeerPrioritario).start();            
+        }
+     }
+    
+
+    private List<String> getListaNomesArquivosDeVideo(File clientFile) {
+        return Arrays.stream(clientFile.list()).filter(fileName -> fileName.endsWith(".mp4")).collect(Collectors.toList());
+    }
+    
+    private void criarPastaSeNaoExistir(File clienteFile) {
+        clienteFile.mkdirs();
+    }
+
+    private String getNomeArquivoAlvo() {
+        System.out.println("Digite o nome do arquivo que está procurando:");
+                        
+        try {
+            String nomeArquivo =  this.leitorInputTeclado.readLine();
+            
+            while (!nomeArquivo.endsWith(".mp4")) {
+                System.out.println("Somente são aceitos arquivos de extensão .mp4");
+                nomeArquivo = this.leitorInputTeclado.readLine();
+            }
+            
+            return nomeArquivo;
+        } catch (IOException e1) {
+            System.out.println("Ocorreu um erro durante a leitura, tente novamente!");
+            return null;
+        }        
+    }
+       
+    /**
+     * Orquestra a requisição SEARCH com o servidor, criando um socket UDP para o envio da mensagem e posteriormente
+     * esperando pela resposta do servidor pelo conjunto de Peers com o arquivo.
+     * 
+     * @TODO: Lida com edge cases, como quando o servidor não responde
+     * 
+     * @param arquivoAlvo
+     * @return conjunto de endereço dos Peers com o arquivo requerido.
+     */
+    private Set<String> getPeersComArquivo(String arquivoAlvo) {
+        try (DatagramSocket socketUDP = new DatagramSocket()){
+            socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
+
+            Mensagem mensagemSearch = mensagemSearchPorPeers(arquivoAlvo, socketUDP);
+            Mensagem mensagemPeersComOArquivo = controlarRecebimentoMensagemUDP(mensagemSearch, socketUDP);
+    
+            return mensagemPeersComOArquivo == null ? null : getDadosPeer(mensagemPeersComOArquivo);
+        } catch (SocketException e) {
+            return new HashSet<>();
+        }
+    }
+
+    /**
+     * Constrói e retorna uma mensagem SEARCH, solicitando os Peers que possuem o arquivo alvo.
+     * @param arquivoAlvo nome do arquivo de vídeo que será requisitado ao servidor
+     * @param socketUDP instância de um socket UDP para envio da mensagem
+     */
+    private Mensagem mensagemSearchPorPeers(String arquivoAlvo, DatagramSocket socketUDP) {
+        Mensagem requisicaoPeers = new Mensagem("SEARCH");
+        requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
+        requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
+        return requisicaoPeers;
+    }
+
+    private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
+        Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
+        String tituloRespostaPeersComOArquivo = mensagemPeersComOArquivo.getTitulo();
+        
+        if (tituloRespostaPeersComOArquivo.equals("SEARCH_OK") && mensagensArquivosPeer.get("lista_peers") instanceof Set<?>) {
+            @SuppressWarnings("unchecked")
+            Set<String> conjuntPeersComArquivo = (Set<String>) mensagensArquivosPeer.get("lista_peers");
+            return conjuntPeersComArquivo;
+        }
+        return new HashSet<>();
+    }
+
+    /**
+     * Classe representante da thread que atua como compartilhadora de arquivos para outros Peers, atuando de forma concorrente.
+     */
     class FileServerThread extends Thread {
         private Socket socket;
         private OutputStream outputStream;
+        private InputStream inputStream;
 
+        /**
+         * @param socket socket construído após o aceite de conexão pelo método ouvinte.
+         * @throws IOException
+         */
         public FileServerThread(Socket socket) throws IOException {
             this.socket = socket;
             this.outputStream = socket.getOutputStream();
-        }
-
-        @Override
-        public void run() {
-            System.out.println("-- SENDING THE LIST OF CLIENTS AVAILABLE TO THE CLIENT OF PORT: " + this.socket.getPort());
-            //PrintStream messageWriter = new PrintStream(new BufferedOutputStream(outputStream));
-            //messageWriter.println(filesAvailable);
-            //messageWriter.flush();
-
-            String dowloadFilePath = clientResourcesFilePath + "video-test.mp4";
-
-            System.out.println("-- TRANSFERING FILE TO THE CLIENT");
-
-            try (BufferedOutputStream fileWriter = new BufferedOutputStream(outputStream);
-                BufferedInputStream fileReader = new BufferedInputStream(new FileInputStream(dowloadFilePath))
-            ) {
-                byte[] packet = new byte[FILE_TRANSFER_PACKET_SIZE];
-
-                long bytesTransfered = 0L;
-                while (fileReader.read(packet) != -1) {
-                    fileWriter.write(packet);
-                    bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
-                    System.out.println(bytesTransfered + " kb");
-                }
-
-                System.out.println("------ SUCCESSFULLY FINISHED TRANSFERING THE FILE");
-            } catch (IOException e) {
-                e.printStackTrace();
-            } 
-        }        
-    }
-
-    /*
-    *  Intended to act as a thread which receives a single file per thread from the server, so its main purpose is to allows 
-    *  donwloading files from multiple servers concurrently.
-    */
-    class FileClientThread extends Thread {
-        private Socket socket;
-        private InputStream inputStream;
-
-        public FileClientThread (String host, int port) throws UnknownHostException, IOException {
-            this.socket = new Socket(host, port);
             this.inputStream = socket.getInputStream();
         }
 
-        private void creatFileIfNotExists(File file) {
-            try {
-                file.createNewFile();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
+        /**
+         * Controla o fluxo de execução da thread. Iniciando pela espera de uma mensagem TCP para fazer um 
+         * hand-shake de qual arquivo o cliente deseja, após o recebimento da mensagem, inicia a transferência do
+         * arquivo para o cliente via o canal de comunicação estabelecido.
+         */
         @Override
         public void run() {
-            System.out.println("-- CONNECTED TO THE SERVER");
-            
-            String writingFilePath = clientResourcesFilePath + "test-video-received.mp4";            
-            File file = new File(writingFilePath);
-            creatFileIfNotExists(file);
-            
-            System.out.println("-- BEGINNING TRANSFER");
-            Long bytesTransfered = 0L;
-            try (                
-                BufferedInputStream fileReader = new BufferedInputStream(inputStream);
-                BufferedOutputStream fileWriter = new BufferedOutputStream(new FileOutputStream(file))
-            ){
-                byte[] data = new byte[FILE_TRANSFER_PACKET_SIZE];
+            Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
+            Map<String, Object> mensagens = mensagem.getMensagens();
+            String titulo = mensagem.getTitulo();
 
-                while (fileReader.read(data) != -1) {
-                    fileWriter.write(data);
-                    bytesTransfered += FILE_TRANSFER_PACKET_SIZE;
-                    System.out.println("+ BYTES TRANSFERED: " + bytesTransfered);
-                } 
-                
-                System.out.println("-- SUCCESSFULLY RECEIVED THE FILE FROM THE SERVER");
+            if (Math.random() > 0.5) {
+                negarDownload();
+                return;
+            }
+            
+            if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
+                String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
+                String caminhoArquivoRequisitado = caminhoPastaDownloadsCliente + nomeArquivo;
+                transferirArquivo(caminhoArquivoRequisitado); 
+            }
+        }
+
+        /**
+         * Responsável por ler o arquivo em disco, e efetua a transferência em pacotes de bytes via canal estabelecido.
+         * 
+         * @param caminhoArquivoRequisitado
+         */
+        private void transferirArquivo(String caminhoArquivoRequisitado) {
+            try (BufferedOutputStream escritorStream = new BufferedOutputStream(outputStream);
+                BufferedInputStream leitorArquivo = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
+                byte[] packet = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
+                while (leitorArquivo.read(packet) != -1) {
+                    escritorStream.write(packet);
+                    escritorStream.flush();
+                }   
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
 
+        private void negarDownload() {
+            Mensagem downloadNegado = new Mensagem("DOWNLOAD_NEGADO");
+            Mensagem.enviarMensagemTCP(outputStream, downloadNegado);
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        System.out.println("Type the server/client's LISTENING port number:");
-        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        int port = Integer.parseInt(reader.readLine());
-        System.out.println("Type the server/client's name:");
-        String clientName = reader.readLine();
+    /**
+     * Atua como uma thread responsável pelo download de um arquivo.
+     */
+    class FileClientThread extends Thread {
+        private Socket socket;
+        private InputStream inputStream;
+        private OutputStream outputStream;
+        private String arquivoAlvo;
+        private List<String> listaPeersComArquivoAlvo;
+        private String enderecoPeerPrioritario;
 
-        Peer client = new Peer(port, clientName);
-        client.startServer();
-        client.startClientConsumer();;
+        public FileClientThread(String arquivoAlvo, Set<String> peersComAOrquivoAlvo, String enderecoPeerPrioritario) {
+            this.arquivoAlvo = arquivoAlvo;
+            this.listaPeersComArquivoAlvo = new ArrayList<>(peersComAOrquivoAlvo);
+
+            if (!listaPeersComArquivoAlvo.get(0).equals(enderecoPeerPrioritario)) {
+                listaPeersComArquivoAlvo.add(0, enderecoPeerPrioritario);
+            }
+
+            this.enderecoPeerPrioritario = enderecoPeerPrioritario;
+        }
+
+        /**
+         * Controla o fluxo de execução da thread. Inicia requisitando uma lista de Peers com o arquivo de interesse e
+         * então estabelece conexão TCP com um dos Peers, combinando então qual o arquivo que será baixado e por fim
+         * requisita o download de fato.
+         */
+        @Override
+        public void run() {
+            boolean isDownloadBemSucedido = false;
+
+            for (int i = 0; !isDownloadBemSucedido; i++) {
+                i = i % this.listaPeersComArquivoAlvo.size();
+                
+                String enderecoPeerAlvo = listaPeersComArquivoAlvo.get(i);
+                System.out.println(String.format("Pedindo agora para o peer %s.", enderecoPeerAlvo));
+
+                estabelecerConexao(enderecoPeerAlvo);
+                combinarArquivoParaDownload();            
+                isDownloadBemSucedido = downloadArquivo();
+
+                if(!isDownloadBemSucedido) {
+                    desligarSocket();
+                    pausarExecucao();
+                    System.out.print(String.format("Peer %s negou o download. ", enderecoPeerAlvo));
+                }            
+            }   
+            
+            System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
+        }
+        
+        private void pausarExecucao() {
+            try {
+                TimeUnit.SECONDS.sleep(5);
+            } catch (InterruptedException e) {
+                System.out.println("Ocorreu um erro durante o intervalo");
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private void desligarSocket()  {
+            if (this.socket != null && this.socket.isConnected()) {
+                try {
+                    this.socket.close();                
+                } catch (IOException e) {                    
+                    System.out.println("Ocorreu um erro durante o download, finalizando execução do Downloader.");
+                    e.printStackTrace();              
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+
+        /**
+         * Estabelece conexão TCP com um Peer e instancia os streams necessários para a transferência de dados.        
+         */
+        private void estabelecerConexao(String enderecoPeer) {
+            try {
+                String[] peerInfo = enderecoPeer.split(":");
+                int porta = Integer.parseInt(peerInfo[1]);
+
+                this.socket = new Socket("localhost", porta);
+                this.inputStream = socket.getInputStream();
+                this.outputStream = socket.getOutputStream();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * Faz uma requisição UDP para o Peer cuja a conexão TCP foi estabelecida.
+         */
+        private void combinarArquivoParaDownload() {
+            Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
+            arquivoRequerido.adicionarMensagem("arquivo_solicitado", this.arquivoAlvo);
+            Mensagem.enviarMensagemTCP(outputStream, arquivoRequerido);
+        }
+
+        /**
+         * Orquestra o download do arquivo, recebendo os bytes em pacotes e os escrevendo no arquivo.
+         */
+        private boolean downloadArquivo() {        
+            boolean isTransferenciaBemSucedida = false;
+
+            try (BufferedInputStream entradaStream = new BufferedInputStream(inputStream);){                
+                byte[] data = new byte[TAMANHO_PACOTES_TRANSFERENCIA];                
+                entradaStream.read(data);
+                
+                if (IsDownloadNegado(data)) {
+                    return false;
+                }
+
+                isTransferenciaBemSucedida = receberTransferenciaArquivo(entradaStream, data);                
+                enviarRequisicaoUpdate();
+            } catch (IOException e) {
+                System.out.println("Não foi possível efetuar o download, tente novamente");                
+            } 
+
+            return isTransferenciaBemSucedida;
+        }
+
+        private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data) {
+            String caminhoEscritaArquivo = caminhoPastaDownloadsCliente + this.arquivoAlvo;            
+            File file = new File(caminhoEscritaArquivo);
+
+            try(BufferedOutputStream escritorStream = new BufferedOutputStream(new FileOutputStream(file))) {
+
+                do {
+                    escritorStream.write(data);
+                    escritorStream.flush();
+                        
+                } while (arquivoLeitor.read(data) != -1);
+
+                return true;
+            } catch(IOException e) {
+                System.out.println("Ocorreu um erro durante o recebimento do arquivo.");
+            }
+            return false;
+        }
+
+        private boolean IsDownloadNegado(byte[] data) {
+            if (data.length == 0) {
+                return true;
+            }
+
+            Mensagem mensagem;
+
+            try {
+                mensagem = Mensagem.deserializarBytes(data);
+            } catch (Exception e) {
+                return false;
+            }
+
+            return mensagem.getTitulo().equals("DOWNLOAD_NEGADO");
+        }
+
+        /**
+         * Faz requisição UPDATE ao servidor, para atualizar os arquivos que possuí e está disposto a compartilhar.
+         */
+        private void enviarRequisicaoUpdate() {
+            if (isCompartilhandoArquivos) {
+                try (DatagramSocket socketUDP = new DatagramSocket()){
+                    Mensagem update = new Mensagem("UPDATE");
+                    update.adicionarMensagem("arquivo", arquivoAlvo);
+                    update.adicionarMensagem("endereco", enderecoEscuta);
+                    Mensagem.enviarMensagemUDP(update, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
+                    
+                    Mensagem updateOk = Mensagem.receberMensagemUDP(socketUDP);
+                    
+                } catch (Exception e) {
+                    System.err.println("Não foi possível enviar a requisição UPDATE ao servidor!");
+                }
+            }
+        }
     }
+
+    private void tratarRequisicaoJoin() {
+        try {
+            if (!this.isCompartilhandoArquivos) {
+                //@TODO: refactor
+                this.servidor = new ServerSocket(porta); 
+                File clienteFile = new File(caminhoPastaDownloadsCliente);
+                this.arquivosDisponiveis = getListaNomesArquivosDeVideo(clienteFile); 
+                
+                joinServidor();
+            } else {
+                System.out.println("Já foi efetuado o JOIN ao servidor anteriormente!");
+            }
+        } catch (IOException e) {
+            System.err.println("Erro na captura, tente novamente");
+        }
+    }
+    
+    private void tratarRequisicaoSearch() {
+        String arquivoAlvo = getNomeArquivoAlvo();        
+        this.ultimoArquivoPesquisado = arquivoAlvo;
+        Set<String> peersComArquivo = getPeersComArquivo(arquivoAlvo);
+
+        if (peersComArquivo == null) {
+            System.out.println("Não se obteve resposta do servidor, tente novamente mais tarde.");
+            return;
+        }
+
+        if (peersComArquivo.size() > 0){
+            this.peersComArquivos = peersComArquivo;
+            System.out.println(String.format("Peers com arquivo solicitado: \n%s", peersComArquivo));
+        } else {
+            System.out.println( String.format("Nenhum Peer foi encotrado com o arquivo %s", arquivoAlvo));
+        }
+    }
+
+    private void tratarRequisicaoDownload() {
+        
+        try {
+            if (this.ultimoArquivoPesquisado == null) {
+                System.out.println("É necessário fazer uma requisição SEARCH antes de efetuar um DOWNLOAD");
+                return;
+            }
+
+            if (this.peersComArquivos == null || this.peersComArquivos.size() == 0) {
+                System.out.println("Não há peers com o arquivo.");
+                return;
+            }
+            
+            String enderecoPeerPrioritario = getEnderecoPeerPrioritario();
+            iniciarDownloader(enderecoPeerPrioritario);
+        } catch (IOException e) {
+            System.err.println("Ocorreu um erro durante a requisição de download, tente novamente.");
+        }
+    }
+
+    private String getEnderecoPeerPrioritario() throws IOException {
+        String enderecoPeerPrioritario = "";
+        
+        do {
+            System.out.println("Entre o endereço de um peer que possui o arquivo alvo e que está na lista encontrada durante o SEARCH");
+            
+            System.out.println("Digite o ip do Peer:");
+            String enderecoIp = this.leitorInputTeclado.readLine();
+            
+            System.out.println("Digite a porta do Peer:");
+            String porta = this.leitorInputTeclado.readLine();
+
+            enderecoPeerPrioritario = enderecoIp + ":" + porta;
+        } while (!this.peersComArquivos.contains(enderecoPeerPrioritario));
+
+        return enderecoPeerPrioritario;
+    }
+
+    private void pararCompartilhamentoDeArquivos() {
+        try {
+            this.servidor.close();
+            this.isCompartilhandoArquivos = false;
+        } catch (IOException e) {
+            System.out.println("Ocorreu um erro durante a tentativa de parada de compartilhamento de arquivos, tente novamente!");
+        }
+    }
+
+    private void tratarRequisicaoLeave() {
+        if (!this.isCompartilhandoArquivos) {
+            System.out.println("O compartilhamento de arquivo já está desativado.");
+            return;
+        }
+
+        try (DatagramSocket socketUDP = new DatagramSocket()) {
+            socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
+            
+            Mensagem mensagemLeave = new Mensagem("LEAVE");
+            mensagemLeave.adicionarMensagem("endereco", this.enderecoEscuta);
+
+            Mensagem respostaServidor = controlarRecebimentoMensagemUDP(mensagemLeave, socketUDP);
+            
+            if (respostaServidor == null) {
+                System.out.println("Não foi obtida resposta do servidor, tente novamente mais tarde.");
+                return;
+            }
+            
+            if (respostaServidor.getTitulo().equals("LEAVE_OK")) {                       
+                pararCompartilhamentoDeArquivos();
+            }
+        } catch (SocketException e) {
+            System.err.println("Não foi possível executar a requisição LEAVE, tente novamente.");            
+        }
+    }
+
+    private void direcionarEscolhaUsuario(String escolhaUsuario) {
+        switch (escolhaUsuario) {
+            case "JOIN":
+                tratarRequisicaoJoin();
+                break;
+            case "SEARCH":
+                tratarRequisicaoSearch();
+                break;
+            case "DOWNLOAD":
+                tratarRequisicaoDownload();
+                break;
+            case "LEAVE":
+                tratarRequisicaoLeave();
+                break;
+            default:
+                System.out.println("Opção não disponível");
+                break;
+        }
+    }
+
+    public void rodarMenuIterativo() {
+        while (true) {
+            System.out.println("Escolha uma das opções:");
+            String opcaoServidor = this.isCompartilhandoArquivos ? "LEAVE" : "JOIN" ;
+            System.out.println(String.format("%s\tSEARCH\tDOWNLOAD", opcaoServidor));
+
+            try {
+                String escolhaUsuario = leitorInputTeclado.readLine();
+                direcionarEscolhaUsuario(escolhaUsuario);
+            } catch (IOException e) {
+                System.err.println("Erro na captura da opção, tente novamente");
+            }
+        }
+    }    
+
+    public static void main(String[] args) {
+        try (Peer peer = new Peer();) {            
+            peer.rodarMenuIterativo();        
+        } catch (IOException e) {
+            System.err.println("Ocorreu um erro durante a execuçaõ, inicie a execução novamente.");
+        }
+    }
+
 }
