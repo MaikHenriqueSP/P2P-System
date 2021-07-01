@@ -1,25 +1,7 @@
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.DatagramSocket;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.io.*;
+import java.net.*;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -29,7 +11,7 @@ import java.util.stream.Collectors;
  * 
  * @author Maik Henrique
  */
-public class Peer {
+public class Peer implements AutoCloseable {
 
     private ServerSocket servidor;
     private String enderecoIp;
@@ -61,6 +43,13 @@ public class Peer {
         this.isCompartilhandoArquivos = false;
         configurarPeer();
     }
+
+    @Override
+    public void close() throws IOException {
+        if (this.servidor != null) {
+            this.servidor.close();
+        }        
+    }    
 
     /**
      * 
@@ -517,6 +506,7 @@ public class Peer {
     }
 
     private void tratarRequisicaoDownload() {
+        
         try {            
             if (this.ultimoArquivoPesquisado != null) {
                 System.out.println("Digite o ip do Peer:");
@@ -606,11 +596,11 @@ public class Peer {
     }    
 
     public static void main(String[] args) {
-        try {
-            Peer peer = new Peer();
+        try (Peer peer = new Peer();) {            
             peer.rodarMenuIterativo();        
         } catch (IOException e) {
             System.err.println("Ocorreu um erro durante a execuçaõ, inicie a execução novamente.");
         }
     }
+
 }
