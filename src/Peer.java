@@ -124,25 +124,16 @@ public class Peer implements AutoCloseable {
      * Ouvinte de conexões TCP, assim quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.
      */
     public class ServidorCompartilhamentOuvinte extends Thread {
-        private final int PORTA_COMPARTILHAMENTO;
-
-        public ServidorCompartilhamentOuvinte(int porta) {
-            this.PORTA_COMPARTILHAMENTO = porta;
-        }
-
         @Override
         public void run() {
-            try (ServerSocket servidor = new ServerSocket(PORTA_COMPARTILHAMENTO)){
+            try {
                 while (isCompartilhandoArquivos) {
                     Socket client = servidor.accept();    
                     new FileServerThread(client).start();
                 }
-            } catch (SocketException e) {
-                e.printStackTrace();
+            } catch (IOException e) {                
                 System.out.println("Desligando servidor de compartilhamento de arquivos");
-            } catch (IOException  e) {
-                e.printStackTrace();
-            }
+            } 
         }            
     }       
     
@@ -151,7 +142,14 @@ public class Peer implements AutoCloseable {
      * Inicializa uma Thread que será ouvinte por download de arquivos de forma concorrente.
      */
     private void iniciarServidorOuvinteDeCompartilhamento() {
-        new ServidorCompartilhamentOuvinte(this.porta).start();
+        try {
+            if (this.servidor == null || this.servidor.isClosed()) {
+                this.servidor = new ServerSocket(this.porta);
+            }
+            new ServidorCompartilhamentOuvinte().start();
+        } catch (IOException e) {
+            System.err.println("Não foi possível inicializar o servidor ouvinte");
+        }
     }
    
     /**
@@ -311,6 +309,7 @@ public class Peer implements AutoCloseable {
         private String arquivoAlvo;
         private List<String> listaPeersComArquivoAlvo;
         private String enderecoPeerPrioritario;
+        
 
         public FileClientThread(String arquivoAlvo, Set<String> peersComAOrquivoAlvo, String enderecoPeerPrioritario) {
             this.arquivoAlvo = arquivoAlvo;
@@ -331,45 +330,39 @@ public class Peer implements AutoCloseable {
         @Override
         public void run() {
             boolean isDownloadBemSucedido = false;
+            
+            try {
+                for (int i = 0; !isDownloadBemSucedido; i++) {
+                    i = i % this.listaPeersComArquivoAlvo.size();
+                    
+                    String enderecoPeerAlvo = listaPeersComArquivoAlvo.get(i);
+                    System.out.println(String.format("Pedindo agora para o peer %s.", enderecoPeerAlvo));
 
-            for (int i = 0; !isDownloadBemSucedido; i++) {
-                i = i % this.listaPeersComArquivoAlvo.size();
-                
-                String enderecoPeerAlvo = listaPeersComArquivoAlvo.get(i);
-                System.out.println(String.format("Pedindo agora para o peer %s.", enderecoPeerAlvo));
+                    estabelecerConexao(enderecoPeerAlvo);
+                    combinarArquivoParaDownload();            
+                    isDownloadBemSucedido = downloadArquivo();
 
-                estabelecerConexao(enderecoPeerAlvo);
-                combinarArquivoParaDownload();            
-                isDownloadBemSucedido = downloadArquivo();
-
-                if(!isDownloadBemSucedido) {
-                    desligarSocket();
-                    pausarExecucao();
-                    System.out.print(String.format("Peer %s negou o download. ", enderecoPeerAlvo));
-                }            
-            }   
+                    if(!isDownloadBemSucedido) {
+                        desligarSocket();
+                        pausarExecucao();
+                            
+                        System.out.print(String.format("Peer %s negou o download. ", enderecoPeerAlvo));
+                    }            
+                }   
+            } catch (InterruptedException | IOException e) {
+                System.out.println("Ocorreu um erro durante o download, finalizando execução do Downloader.");
+            }
             
             System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
         }
         
-        private void pausarExecucao() {
-            try {
-                TimeUnit.SECONDS.sleep(5);
-            } catch (InterruptedException e) {
-                System.out.println("Ocorreu um erro durante o intervalo");
-                Thread.currentThread().interrupt();
-            }
+        private void pausarExecucao() throws InterruptedException {
+            TimeUnit.SECONDS.sleep(5);
         }
 
-        private void desligarSocket()  {
+        private void desligarSocket() throws IOException  {
             if (this.socket != null && this.socket.isConnected()) {
-                try {
-                    this.socket.close();                
-                } catch (IOException e) {                    
-                    System.out.println("Ocorreu um erro durante o download, finalizando execução do Downloader.");
-                    e.printStackTrace();              
-                    Thread.currentThread().interrupt();
-                }
+                this.socket.close();                
             }
         }
 
