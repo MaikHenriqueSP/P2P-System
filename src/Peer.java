@@ -259,21 +259,33 @@ public class Peer implements AutoCloseable {
          */
         @Override
         public void run() {
-            Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
-            Map<String, Object> mensagens = mensagem.getMensagens();
-            String titulo = mensagem.getTitulo();
-
-            if (Math.random() > 0.5) {
-                negarDownload();
-                return;
-            }
-            
-            if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
-                String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
-                String caminhoArquivoRequisitado = caminhoPastaDownloadsCliente + nomeArquivo;
-                transferirArquivo(caminhoArquivoRequisitado); 
+            try {
+                Mensagem mensagem = Mensagem.receberMensagemTCP(this.inputStream);
+                Map<String, Object> mensagens = mensagem.getMensagens();
+                String titulo = mensagem.getTitulo();
+                
+                if (Math.random() > 0.5) {
+                    negarDownload();
+                    return;
+                }
+                
+                if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
+                    String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
+                    String caminhoArquivoRequisitado = caminhoPastaDownloadsCliente + nomeArquivo;
+                    transferirArquivo(caminhoArquivoRequisitado); 
+                }
+            } finally {
+                desligarSocketCompartilhamento();
             }
         }
+
+        private void desligarSocketCompartilhamento() {
+            try {
+                this.socket.close();
+            } catch (IOException e) {
+                System.out.println("Ocorreu um erro durante o desligamento do servidor.");
+            }
+        }        
 
         /**
          * Responsável por ler o arquivo em disco, e efetua a transferência em pacotes de bytes via canal estabelecido.
@@ -284,6 +296,7 @@ public class Peer implements AutoCloseable {
             try (BufferedOutputStream escritorStream = new BufferedOutputStream(outputStream);
                 BufferedInputStream leitorArquivo = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
                 byte[] packet = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
+                
                 while (leitorArquivo.read(packet) != -1) {
                     escritorStream.write(packet);
                     escritorStream.flush();
