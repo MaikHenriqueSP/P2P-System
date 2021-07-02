@@ -275,7 +275,7 @@ public class Peer implements AutoCloseable {
                     transferirArquivo(caminhoArquivoRequisitado); 
                 }
             } finally {
-                Peer.fecharSocket(this.socket);
+                Peer.fecharConexao(this.socket);
             }
         }
 
@@ -357,7 +357,7 @@ public class Peer implements AutoCloseable {
             } catch (InterruptedException | IOException e) {
                 System.out.println("Ocorreu um erro durante o download, finalizando execução do Downloader.");
             } finally {
-                Peer.fecharSocket(this.socket);               
+                Peer.fecharConexao(this.socket);               
             }
             
             System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
@@ -476,6 +476,17 @@ public class Peer implements AutoCloseable {
         }
     }
 
+    private static <T extends AutoCloseable> boolean  fecharConexao(T closeableInstance) {
+        try {
+            if (closeableInstance != null) {
+                closeableInstance.close();
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        } 
+    }
+
     private void tratarRequisicaoJoin() {
         if (!this.isCompartilhandoArquivos) {
             File clienteFile = new File(caminhoPastaDownloadsCliente);
@@ -504,8 +515,7 @@ public class Peer implements AutoCloseable {
         }
     }
 
-    private void tratarRequisicaoDownload() {
-        
+    private void tratarRequisicaoDownload() {        
         try {
             if (this.ultimoArquivoPesquisado == null) {
                 System.out.println("É necessário fazer uma requisição SEARCH antes de efetuar um DOWNLOAD");
@@ -543,11 +553,9 @@ public class Peer implements AutoCloseable {
     }
 
     private void pararCompartilhamentoDeArquivos() {
-        try {
-            this.servidor.close();
+        boolean isConexaoFechada = fecharConexao(this.servidor);
+        if (isConexaoFechada) {
             this.isCompartilhandoArquivos = false;
-        } catch (IOException e) {
-            System.out.println("Ocorreu um erro durante a tentativa de parada de compartilhamento de arquivos, tente novamente!");
         }
     }
 
@@ -612,16 +620,6 @@ public class Peer implements AutoCloseable {
             }
         }
     }    
-
-    private static void fecharSocket(Socket socket) {
-        try {
-            if (socket != null) {
-                socket.close();
-            }
-        } catch (IOException e) {
-            System.out.println("Ocorreu um erro durante o desligamento do socket.");
-        }
-    }
 
     public static void main(String[] args) {
         try (Peer peer = new Peer();) {            
