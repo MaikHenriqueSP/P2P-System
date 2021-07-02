@@ -80,7 +80,6 @@ public class Peer implements AutoCloseable {
      */
     private void joinServidor() {
         Mensagem mensagemJoin = new Mensagem("JOIN");
-
         mensagemJoin.adicionarMensagem("arquivos", this.arquivosDisponiveis);
         mensagemJoin.adicionarMensagem("endereco", this.enderecoEscuta);
 
@@ -96,8 +95,8 @@ public class Peer implements AutoCloseable {
 
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
                 System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
-                iniciarServidorOuvinteDeCompartilhamento();
                 this.isCompartilhandoArquivos = true;
+                iniciarServidorOuvinteDeCompartilhamento();
             } 
         } catch (SocketException e) {
             e.printStackTrace();            
@@ -121,33 +120,38 @@ public class Peer implements AutoCloseable {
         return respostaServidor;
     }
     
-
     /**
      * Ouvinte de conexões TCP, assim quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.
      */
     public class ServidorCompartilhamentOuvinte extends Thread {
+        private final int PORTA_COMPARTILHAMENTO;
+
+        public ServidorCompartilhamentOuvinte(int porta) {
+            this.PORTA_COMPARTILHAMENTO = porta;
+        }
 
         @Override
         public void run() {
-            while (isCompartilhandoArquivos) {
-                try {
+            try (ServerSocket servidor = new ServerSocket(PORTA_COMPARTILHAMENTO)){
+                while (isCompartilhandoArquivos) {
                     Socket client = servidor.accept();    
                     new FileServerThread(client).start();
-                } catch (SocketException e) {
-                    System.out.println("Desligando servidor de compartilhamento de arquivos");
-                } catch (IOException  e) {
-                    e.printStackTrace();
-                    break;
                 }
+            } catch (SocketException e) {
+                e.printStackTrace();
+                System.out.println("Desligando servidor de compartilhamento de arquivos");
+            } catch (IOException  e) {
+                e.printStackTrace();
             }
-        }       
-    }
+        }            
+    }       
+    
 
     /**
      * Inicializa uma Thread que será ouvinte por download de arquivos de forma concorrente.
      */
     private void iniciarServidorOuvinteDeCompartilhamento() {
-        new ServidorCompartilhamentOuvinte().start();
+        new ServidorCompartilhamentOuvinte(this.porta).start();
     }
    
     /**
@@ -473,19 +477,12 @@ public class Peer implements AutoCloseable {
     }
 
     private void tratarRequisicaoJoin() {
-        try {
-            if (!this.isCompartilhandoArquivos) {
-                //@TODO: refactor
-                this.servidor = new ServerSocket(porta); 
-                File clienteFile = new File(caminhoPastaDownloadsCliente);
-                this.arquivosDisponiveis = getListaNomesArquivosDeVideo(clienteFile); 
-                
-                joinServidor();
-            } else {
-                System.out.println("Já foi efetuado o JOIN ao servidor anteriormente!");
-            }
-        } catch (IOException e) {
-            System.err.println("Erro na captura, tente novamente");
+        if (!this.isCompartilhandoArquivos) {
+            File clienteFile = new File(caminhoPastaDownloadsCliente);
+            this.arquivosDisponiveis = getListaNomesArquivosDeVideo(clienteFile);             
+            joinServidor();
+        } else {
+            System.out.println("Já foi efetuado o JOIN ao servidor anteriormente!");
         }
     }
     
