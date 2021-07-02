@@ -275,17 +275,9 @@ public class Peer implements AutoCloseable {
                     transferirArquivo(caminhoArquivoRequisitado); 
                 }
             } finally {
-                desligarSocketCompartilhamento();
+                Peer.fecharSocket(this.socket);
             }
         }
-
-        private void desligarSocketCompartilhamento() {
-            try {
-                this.socket.close();
-            } catch (IOException e) {
-                System.out.println("Ocorreu um erro durante o desligamento do servidor.");
-            }
-        }        
 
         /**
          * Responsável por ler o arquivo em disco, e efetua a transferência em pacotes de bytes via canal estabelecido.
@@ -364,6 +356,8 @@ public class Peer implements AutoCloseable {
                 }   
             } catch (InterruptedException | IOException e) {
                 System.out.println("Ocorreu um erro durante o download, finalizando execução do Downloader.");
+            } finally {
+                Peer.fecharSocket(this.socket);               
             }
             
             System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
@@ -618,6 +612,16 @@ public class Peer implements AutoCloseable {
             }
         }
     }    
+
+    private static void fecharSocket(Socket socket) {
+        try {
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
+            System.out.println("Ocorreu um erro durante o desligamento do socket.");
+        }
+    }
 
     public static void main(String[] args) {
         try (Peer peer = new Peer();) {            
