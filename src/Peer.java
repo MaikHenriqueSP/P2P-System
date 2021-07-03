@@ -14,29 +14,26 @@ import java.util.stream.Collectors;
 public class Peer implements AutoCloseable {
 
     private ServerSocket servidor;
-    private String enderecoIp;
+    private String enderecoOuvinteRequisicoesTCP;
+    private final BufferedReader leitorInputTeclado;
+
     private int porta;
     private boolean isCompartilhandoArquivos;
 
-    // @TODO: remove it and receive the path to the client's file folder
-    private String nomeCliente;
-
-    private static final String CAMINHO_BASE_DOWNLOAD = "client/resource/";
-    private String caminhoPastaDownloadsCliente;
+    private String caminhoAbsolutoPastaCliente;
     private List<String> arquivosDisponiveis;
     
     /**
      *  Define o tamanho padrão dos pacotes para transferência, sendo padronizados em 8 kbytes.
      */
     public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8;
-    private Set<String> peersComArquivos;
+
+    private Set<String> peersComUltimoArquivoPesquisado;
     private String ultimoArquivoPesquisado;
 
-    private final BufferedReader leitorInputTeclado;
-    private String enderecoEscuta;
-
     private static int TEMPO_ESPERA_RESPOSTA_UDP = (int)TimeUnit.SECONDS.toMillis(2);
-    private static int NUMERO_MAXIMO_REQUISICOES = 5;
+    private static int NUMERO_MAXIMO_REQUISICOES_AO_SERVIDOR = 5;
+    
 
     public Peer() throws IOException {
         this.leitorInputTeclado = new BufferedReader(new InputStreamReader(System.in));
@@ -58,19 +55,17 @@ public class Peer implements AutoCloseable {
     private void configurarPeer() throws IOException {
         System.out.println("Digite o IP:");
         String enderecoIp = leitorInputTeclado.readLine();
-        this.enderecoIp = enderecoIp;
 
         System.out.println("Digite a porta:");
         int porta = Integer.parseInt(leitorInputTeclado.readLine());
         this.porta = porta;            
 
-        System.out.println("Digite o nome da pasta dos arquivos que deseja compartilhar:");
-        String pastaArquivos = leitorInputTeclado.readLine();
-        this.nomeCliente = pastaArquivos.toLowerCase();
+        System.out.println("Digite o caminho absoluto da pasta em que deseja baixar arquivos e/ou compartilhar arquivos:");
+        this.caminhoAbsolutoPastaCliente = leitorInputTeclado.readLine();
 
-        this.enderecoEscuta = enderecoIp + ":" + porta;
-        this.caminhoPastaDownloadsCliente = CAMINHO_BASE_DOWNLOAD + this.nomeCliente + "/";
-        File clienteFile = new File(caminhoPastaDownloadsCliente);
+        this.enderecoOuvinteRequisicoesTCP = enderecoIp + ":" + porta;
+
+        File clienteFile = new File(caminhoAbsolutoPastaCliente);
         criarPastaSeNaoExistir(clienteFile);
     }
 
@@ -81,7 +76,7 @@ public class Peer implements AutoCloseable {
     private void joinServidor() {
         Mensagem mensagemJoin = new Mensagem("JOIN");
         mensagemJoin.adicionarMensagem("arquivos", this.arquivosDisponiveis);
-        mensagemJoin.adicionarMensagem("endereco", this.enderecoEscuta);
+        mensagemJoin.adicionarMensagem("endereco", this.enderecoOuvinteRequisicoesTCP);
 
         try (DatagramSocket socketUDP = new DatagramSocket()){
             socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
@@ -94,7 +89,7 @@ public class Peer implements AutoCloseable {
             }
 
             if (respostaServidor.getTitulo().equals("JOIN_OK")) {
-                System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoEscuta, this.arquivosDisponiveis));
+                System.out.println(String.format("Sou o peer %s com os arquivos: \n%s", this.enderecoOuvinteRequisicoesTCP, this.arquivosDisponiveis));
                 this.isCompartilhandoArquivos = true;
                 iniciarServidorOuvinteDeCompartilhamento();
             } 
@@ -115,13 +110,13 @@ public class Peer implements AutoCloseable {
         Mensagem respostaServidor = null;
         int contadorRequisicoes = 0;
 
-        while (respostaServidor == null && contadorRequisicoes != NUMERO_MAXIMO_REQUISICOES) {
+        while (respostaServidor == null && contadorRequisicoes != NUMERO_MAXIMO_REQUISICOES_AO_SERVIDOR) {
             Mensagem.enviarMensagemUDP(mensagem, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);                
             respostaServidor = Mensagem.receberMensagemUDP(socketUDP);                
             contadorRequisicoes++;
         }
 
-        if (respostaServidor == null && contadorRequisicoes == NUMERO_MAXIMO_REQUISICOES) {
+        if (respostaServidor == null && contadorRequisicoes == NUMERO_MAXIMO_REQUISICOES_AO_SERVIDOR) {
             return null;
         }
 
@@ -164,7 +159,7 @@ public class Peer implements AutoCloseable {
      */
     private void iniciarDownloader(String enderecoPeerPrioritario) {
         if (!enderecoPeerPrioritario.isEmpty()) {
-            new ClienteArquivosThread(this.ultimoArquivoPesquisado, this.peersComArquivos, enderecoPeerPrioritario).start();            
+            new ClienteArquivosThread(this.ultimoArquivoPesquisado, this.peersComUltimoArquivoPesquisado, enderecoPeerPrioritario).start();            
         }
      }
     
@@ -225,7 +220,7 @@ public class Peer implements AutoCloseable {
     private Mensagem mensagemSearchPorPeers(String arquivoAlvo, DatagramSocket socketUDP) {
         Mensagem requisicaoPeers = new Mensagem("SEARCH");
         requisicaoPeers.adicionarMensagem("arquivo_requistado", arquivoAlvo);
-        requisicaoPeers.adicionarMensagem("endereco", enderecoEscuta);
+        requisicaoPeers.adicionarMensagem("endereco", enderecoOuvinteRequisicoesTCP);
         return requisicaoPeers;
     }
 
@@ -286,7 +281,7 @@ public class Peer implements AutoCloseable {
                 
                 if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
                     String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
-                    String caminhoArquivoRequisitado = caminhoPastaDownloadsCliente + nomeArquivo;
+                    String caminhoArquivoRequisitado = caminhoAbsolutoPastaCliente + nomeArquivo;
                     transferirArquivo(caminhoArquivoRequisitado); 
                 }
             } finally {
@@ -328,6 +323,8 @@ public class Peer implements AutoCloseable {
         private OutputStream outputStream;
         private String arquivoAlvo;
         private List<String> listaPeersComArquivoAlvo;
+        private final int REQUISICOES_POR_PEER = 4;
+        private final int TOTAL_REQUISICOES;
 
         public ClienteArquivosThread(String arquivoAlvo, Set<String> peersComAOrquivoAlvo, String enderecoPeerPrioritario) {
             this.arquivoAlvo = arquivoAlvo;
@@ -336,6 +333,8 @@ public class Peer implements AutoCloseable {
             if (!listaPeersComArquivoAlvo.get(0).equals(enderecoPeerPrioritario)) {
                 listaPeersComArquivoAlvo.add(0, enderecoPeerPrioritario);
             }
+
+            this.TOTAL_REQUISICOES = REQUISICOES_POR_PEER * peersComAOrquivoAlvo.size();
         }
 
         /**
@@ -348,7 +347,7 @@ public class Peer implements AutoCloseable {
             boolean isDownloadBemSucedido = false;
             
             try {
-                for (int i = 0; !isDownloadBemSucedido; i++) {
+                for (int i = 0; !isDownloadBemSucedido && i < TOTAL_REQUISICOES ; i++) {
                     i = i % this.listaPeersComArquivoAlvo.size();
                     
                     String enderecoPeerAlvo = listaPeersComArquivoAlvo.get(i);
@@ -371,7 +370,7 @@ public class Peer implements AutoCloseable {
                 Peer.fecharConexao(this.socket);               
             }
             
-            System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoPastaDownloadsCliente));
+            System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoAbsolutoPastaCliente));
         }
         
         private void pausarExecucao() throws InterruptedException {
@@ -443,7 +442,7 @@ public class Peer implements AutoCloseable {
          * @return true se o download foi bem sucedido e false caso contrário.
          */
         private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data) {
-            String caminhoEscritaArquivo = caminhoPastaDownloadsCliente + this.arquivoAlvo;            
+            String caminhoEscritaArquivo = caminhoAbsolutoPastaCliente + this.arquivoAlvo;            
             File file = new File(caminhoEscritaArquivo);
 
             try(BufferedOutputStream escritorStream = new BufferedOutputStream(new FileOutputStream(file))) {
@@ -493,7 +492,7 @@ public class Peer implements AutoCloseable {
                 try (DatagramSocket socketUDP = new DatagramSocket()){
                     Mensagem update = new Mensagem("UPDATE");
                     update.adicionarMensagem("arquivo", arquivoAlvo);
-                    update.adicionarMensagem("endereco", enderecoEscuta);
+                    update.adicionarMensagem("endereco", enderecoOuvinteRequisicoesTCP);
                     Mensagem.enviarMensagemUDP(update, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
                     
                     Mensagem updateOk = Mensagem.receberMensagemUDP(socketUDP);
@@ -537,7 +536,7 @@ public class Peer implements AutoCloseable {
             String porta = this.leitorInputTeclado.readLine();
 
             enderecoPeerPrioritario = enderecoIp + ":" + porta;
-        } while (!this.peersComArquivos.contains(enderecoPeerPrioritario));
+        } while (!this.peersComUltimoArquivoPesquisado.contains(enderecoPeerPrioritario));
 
         return enderecoPeerPrioritario;
     }
@@ -554,7 +553,7 @@ public class Peer implements AutoCloseable {
      */
     private void tratarRequisicaoJoin() {
         if (!this.isCompartilhandoArquivos) {
-            File clienteFile = new File(caminhoPastaDownloadsCliente);
+            File clienteFile = new File(caminhoAbsolutoPastaCliente);
             this.arquivosDisponiveis = getListaNomesArquivosDeVideo(clienteFile);             
             joinServidor();
         } else {
@@ -577,7 +576,7 @@ public class Peer implements AutoCloseable {
         }
 
         if (peersComArquivo.size() > 0){
-            this.peersComArquivos = peersComArquivo;
+            this.peersComUltimoArquivoPesquisado = peersComArquivo;
             System.out.println(String.format("Peers com arquivo solicitado: \n%s", peersComArquivo));
         } else {
             System.out.println( String.format("Nenhum Peer foi encotrado com o arquivo %s", arquivoAlvo));
@@ -594,7 +593,7 @@ public class Peer implements AutoCloseable {
                 return;
             }
 
-            if (this.peersComArquivos == null || this.peersComArquivos.size() == 0) {
+            if (this.peersComUltimoArquivoPesquisado == null || this.peersComUltimoArquivoPesquisado.size() == 0) {
                 System.out.println("Não há peers com o arquivo.");
                 return;
             }
@@ -620,7 +619,7 @@ public class Peer implements AutoCloseable {
             socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
             
             Mensagem mensagemLeave = new Mensagem("LEAVE");
-            mensagemLeave.adicionarMensagem("endereco", this.enderecoEscuta);
+            mensagemLeave.adicionarMensagem("endereco", this.enderecoOuvinteRequisicoesTCP);
 
             Mensagem respostaServidor = controlarRecebimentoMensagemUDP(mensagemLeave, socketUDP);
             
