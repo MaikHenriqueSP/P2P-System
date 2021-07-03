@@ -273,7 +273,7 @@ public class Peer implements AutoCloseable {
                 Map<String, Object> mensagens = mensagem.getMensagens();
                 String titulo = mensagem.getTitulo();
                 
-                if (Math.random() <= 1) {
+                if (Math.random() > 0.5) {
                     negarDownload();
                     return;
                 }
