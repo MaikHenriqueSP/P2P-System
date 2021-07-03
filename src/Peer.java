@@ -65,6 +65,7 @@ public class Peer implements AutoCloseable {
 
         this.enderecoOuvinteRequisicoesTCP = enderecoIp + ":" + porta;
 
+        System.out.println(caminhoAbsolutoPastaCliente);
         File clienteFile = new File(caminhoAbsolutoPastaCliente);
         criarPastaSeNaoExistir(clienteFile);
     }
@@ -298,11 +299,13 @@ public class Peer implements AutoCloseable {
             try (BufferedOutputStream escritorStream = new BufferedOutputStream(outputStream);
                 BufferedInputStream leitorArquivo = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
                 byte[] packet = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
-                
-                while (leitorArquivo.read(packet) != -1) {
-                    escritorStream.write(packet);
-                    escritorStream.flush();
-                }   
+                int quantidadeBytesNoBuffer = 0;                
+
+                while ( (quantidadeBytesNoBuffer = leitorArquivo.read(packet)) != -1) {
+                    escritorStream.write(packet, 0, quantidadeBytesNoBuffer);
+                }
+
+                escritorStream.flush();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -419,13 +422,13 @@ public class Peer implements AutoCloseable {
 
             try (BufferedInputStream entradaStream = new BufferedInputStream(inputStream);){                
                 byte[] data = new byte[TAMANHO_PACOTES_TRANSFERENCIA];                
-                entradaStream.read(data);
+                int quantidadeBytesLido = entradaStream.read(data);
                 
                 if (isDownloadNegado(data)) {
                     return false;
                 }
 
-                isTransferenciaBemSucedida = receberTransferenciaArquivo(entradaStream, data);                
+                isTransferenciaBemSucedida = receberTransferenciaArquivo(entradaStream, data, quantidadeBytesLido);                
                 enviarRequisicaoUpdate();
             } catch (IOException e) {
                 System.out.println("Não foi possível efetuar o download, tente novamente");                
@@ -441,18 +444,18 @@ public class Peer implements AutoCloseable {
          * @param data pacote de bytes inicial que foi utilizado decidir se o download foi negado ou não.
          * @return true se o download foi bem sucedido e false caso contrário.
          */
-        private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data) {
-            String caminhoEscritaArquivo = caminhoAbsolutoPastaCliente + this.arquivoAlvo;            
+        private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data, int quantidadeBytesLido) {
+            String caminhoEscritaArquivo = caminhoAbsolutoPastaCliente +  this.arquivoAlvo;            
             File file = new File(caminhoEscritaArquivo);
 
             try(BufferedOutputStream escritorStream = new BufferedOutputStream(new FileOutputStream(file))) {
 
                 do {
-                    escritorStream.write(data);
-                    escritorStream.flush();
-                        
-                } while (arquivoLeitor.read(data) != -1);
-
+                    escritorStream.write(data, 0, quantidadeBytesLido);
+                    
+                } while ( (quantidadeBytesLido = arquivoLeitor.read(data)) != -1);
+                escritorStream.flush();
+                
                 return true;
             } catch(IOException e) {
                 System.out.println("Ocorreu um erro durante o recebimento do arquivo.");

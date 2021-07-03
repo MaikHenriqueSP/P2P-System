@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.nio.charset.Charset;
 
 /**
  * Classe responsável por coordenar o compartilhamento de arquivos entre Peers
@@ -252,7 +253,7 @@ public class Servidor implements AutoCloseable {
 
     private static String lerEnderecoServidor() {
         System.out.println("Endereço IP do servidor:");        
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));){
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));){
             return reader.readLine();
         } catch (IOException e) {
             return "127.0.0.1";
