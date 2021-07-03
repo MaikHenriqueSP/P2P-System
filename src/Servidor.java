@@ -23,6 +23,7 @@ public class Servidor implements AutoCloseable {
     public static final String ENDERECO_SERVIDOR = "localhost";
     private final Map<String, Set<String>> mapaEnderecoPeersParaArquivos;
     private final Map<String, Set<String>> mapaArquivosParaEnderecoPeers;
+    private static final int TAMANHO_PACOTES_TRANSFERENCIA = 8 * 1024;
     
     public Servidor() throws IOException {
         this.socketUDP = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
@@ -40,7 +41,7 @@ public class Servidor implements AutoCloseable {
      */
     public void ligarServidor() throws IOException, ClassNotFoundException {
         while (true) {
-            byte[] bytesRecebidos = new byte[8 * 1024];
+            byte[] bytesRecebidos = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
             DatagramPacket pacote = new DatagramPacket(bytesRecebidos, bytesRecebidos.length);
             socketUDP.receive(pacote);
             new RequisicaoClienteThread(pacote).start();
