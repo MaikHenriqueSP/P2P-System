@@ -137,7 +137,7 @@ public class Peer implements AutoCloseable {
             try {
                 while (isCompartilhandoArquivos) {
                     Socket client = servidor.accept();    
-                    new FileServerThread(client).start();
+                    new ServidorArquivosThread(client).start();
                 }
             } catch (IOException e) {                
                 System.out.println("Desligando servidor de compartilhamento de arquivos");
@@ -164,7 +164,7 @@ public class Peer implements AutoCloseable {
      */
     private void iniciarDownloader(String enderecoPeerPrioritario) {
         if (!enderecoPeerPrioritario.isEmpty()) {
-            new FileClientThread(this.ultimoArquivoPesquisado, this.peersComArquivos, enderecoPeerPrioritario).start();            
+            new ClienteArquivosThread(this.ultimoArquivoPesquisado, this.peersComArquivos, enderecoPeerPrioritario).start();            
         }
      }
     
@@ -252,7 +252,7 @@ public class Peer implements AutoCloseable {
      * Assim, cada requisição de DOWNLOAD é tratada por esta classe, desde o handshake de qual arquivo será disponibilizado até
      * a execução da transferência de fato.
      */
-    class FileServerThread extends Thread {
+    class ServidorArquivosThread extends Thread {
         private Socket socket;
         private OutputStream outputStream;
         private InputStream inputStream;
@@ -261,7 +261,7 @@ public class Peer implements AutoCloseable {
          * @param socket socket construído após o aceite de conexão pelo método ouvinte.
          * @throws IOException
          */
-        public FileServerThread(Socket socket) throws IOException {
+        public ServidorArquivosThread(Socket socket) throws IOException {
             this.socket = socket;
             this.outputStream = socket.getOutputStream();
             this.inputStream = socket.getInputStream();
@@ -322,24 +322,20 @@ public class Peer implements AutoCloseable {
     /**
      * Thread responsável pelo recebimento e escrita em disco de um arquivo vindo de outro Peer.
      */
-    class FileClientThread extends Thread {
+    class ClienteArquivosThread extends Thread {
         private Socket socket;
         private InputStream inputStream;
         private OutputStream outputStream;
         private String arquivoAlvo;
         private List<String> listaPeersComArquivoAlvo;
-        private String enderecoPeerPrioritario;
-        
 
-        public FileClientThread(String arquivoAlvo, Set<String> peersComAOrquivoAlvo, String enderecoPeerPrioritario) {
+        public ClienteArquivosThread(String arquivoAlvo, Set<String> peersComAOrquivoAlvo, String enderecoPeerPrioritario) {
             this.arquivoAlvo = arquivoAlvo;
             this.listaPeersComArquivoAlvo = new ArrayList<>(peersComAOrquivoAlvo);
 
             if (!listaPeersComArquivoAlvo.get(0).equals(enderecoPeerPrioritario)) {
                 listaPeersComArquivoAlvo.add(0, enderecoPeerPrioritario);
             }
-
-            this.enderecoPeerPrioritario = enderecoPeerPrioritario;
         }
 
         /**
