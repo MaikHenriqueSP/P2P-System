@@ -426,7 +426,7 @@ public class Peer implements AutoCloseable {
                 byte[] data = new byte[TAMANHO_PACOTES_TRANSFERENCIA];                
                 entradaStream.read(data);
                 
-                if (IsDownloadNegado(data)) {
+                if (isDownloadNegado(data)) {
                     return false;
                 }
 
@@ -472,7 +472,7 @@ public class Peer implements AutoCloseable {
          * @param data pacote de bytes recebido.
          * @return true se o download foi negado e false caso contrário.
          */
-        private boolean IsDownloadNegado(byte[] data) {
+        private boolean isDownloadNegado(byte[] data) {
             if (data.length == 0) {
                 return true;
             }
