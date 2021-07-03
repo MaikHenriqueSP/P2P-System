@@ -1,6 +1,8 @@
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -21,14 +23,16 @@ public class Servidor implements AutoCloseable {
     private final DatagramSocket socketUDP;
     public static final int PORTA_SOCKET_RECEPTOR = 10098;
     public static final String ENDERECO_SERVIDOR = "localhost";
+    public final String ENDERECO_SERVIDOR_FICTICIO;
     private final Map<String, Set<String>> mapaEnderecoPeersParaArquivos;
     private final Map<String, Set<String>> mapaArquivosParaEnderecoPeers;
     private static final int TAMANHO_PACOTES_TRANSFERENCIA = 8 * 1024;
     
-    public Servidor() throws IOException {
+    public Servidor(String enderecoServidor) throws IOException {
         this.socketUDP = new DatagramSocket(PORTA_SOCKET_RECEPTOR);
         this.mapaEnderecoPeersParaArquivos = new ConcurrentHashMap<>();
         this.mapaArquivosParaEnderecoPeers = new ConcurrentHashMap<>();
+        this.ENDERECO_SERVIDOR_FICTICIO = enderecoServidor;
     }
 
     /**
@@ -245,13 +249,26 @@ public class Servidor implements AutoCloseable {
         }      
     }
 
+
+    private static String lerEnderecoServidor() {
+        System.out.println("Endereço IP do servidor:");        
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));){
+            return reader.readLine();
+        } catch (IOException e) {
+            return "127.0.0.1";
+        }
+    }
+
     public static void main(String[] args) {
-        try (Servidor servidor = new Servidor()){            
+        String enderecoServidor = lerEnderecoServidor();
+        
+        try (Servidor servidor = new Servidor(enderecoServidor)){            
             servidor.ligarServidor();
         } catch (Exception e) {
             e.printStackTrace();
         } 
     }
+
 
 
 }
