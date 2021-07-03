@@ -62,12 +62,8 @@ public class Peer implements AutoCloseable {
 
         System.out.println("Digite o caminho absoluto da pasta em que deseja baixar arquivos e/ou compartilhar arquivos:");
         this.caminhoAbsolutoPastaCliente = leitorInputTeclado.readLine();
-
-        System.out.println(caminhoAbsolutoPastaCliente);
-
         this.enderecoOuvinteRequisicoesTCP = enderecoIp + ":" + porta;
 
-        System.out.println(caminhoAbsolutoPastaCliente);
         File clienteFile = new File(caminhoAbsolutoPastaCliente);
         criarPastaSeNaoExistir(clienteFile);
     }
@@ -277,14 +273,14 @@ public class Peer implements AutoCloseable {
                 Map<String, Object> mensagens = mensagem.getMensagens();
                 String titulo = mensagem.getTitulo();
                 
-                if (Math.random() > 0.5) {
+                if (Math.random() <= 1) {
                     negarDownload();
                     return;
                 }
                 
                 if (titulo.equals("DOWNLOAD") && mensagens.get("arquivo_solicitado") instanceof String) {
                     String nomeArquivo = (String) mensagens.get("arquivo_solicitado");
-                    String caminhoArquivoRequisitado = caminhoAbsolutoPastaCliente + nomeArquivo;
+                    File caminhoArquivoRequisitado = new File(caminhoAbsolutoPastaCliente, nomeArquivo);
                     transferirArquivo(caminhoArquivoRequisitado); 
                 }
             } finally {
@@ -297,7 +293,7 @@ public class Peer implements AutoCloseable {
          * 
          * @param caminhoArquivoRequisitado
          */
-        private void transferirArquivo(String caminhoArquivoRequisitado) {
+        private void transferirArquivo(File caminhoArquivoRequisitado) {
             try (BufferedOutputStream escritorStream = new BufferedOutputStream(outputStream);
                 BufferedInputStream leitorArquivo = new BufferedInputStream(new FileInputStream(caminhoArquivoRequisitado));){
                 byte[] packet = new byte[TAMANHO_PACOTES_TRANSFERENCIA];
@@ -352,7 +348,7 @@ public class Peer implements AutoCloseable {
             boolean isDownloadBemSucedido = false;
             
             try {
-                for (int i = 0; !isDownloadBemSucedido && i < TOTAL_REQUISICOES ; i++) {
+                for (int i = 0, totalRequisicoes = 0; !isDownloadBemSucedido && totalRequisicoes < TOTAL_REQUISICOES ; i++, totalRequisicoes++) {
                     i = i % this.listaPeersComArquivoAlvo.size();
                     
                     String enderecoPeerAlvo = listaPeersComArquivoAlvo.get(i);
@@ -375,7 +371,11 @@ public class Peer implements AutoCloseable {
                 Peer.fecharConexao(this.socket);               
             }
             
-            System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoAbsolutoPastaCliente));
+            if (isDownloadBemSucedido) {
+                System.out.println(String.format("Arquivo %s baixado com sucesso na pasta %s", this.arquivoAlvo, caminhoAbsolutoPastaCliente));
+            } else {
+                System.out.println("\nO download falhou, tente novamente mais tarde.");
+            }
         }
         
         private void pausarExecucao() throws InterruptedException {
@@ -447,8 +447,7 @@ public class Peer implements AutoCloseable {
          * @return true se o download foi bem sucedido e false caso contrário.
          */
         private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data, int quantidadeBytesLido) {
-            String caminhoEscritaArquivo = caminhoAbsolutoPastaCliente +  this.arquivoAlvo;            
-            File file = new File(caminhoEscritaArquivo);
+            File file = new File(caminhoAbsolutoPastaCliente,  this.arquivoAlvo);
 
             try(BufferedOutputStream escritorStream = new BufferedOutputStream(new FileOutputStream(file))) {
 
