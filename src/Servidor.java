@@ -252,8 +252,8 @@ public class Servidor implements AutoCloseable {
 
 
     private static String lerEnderecoServidor() {
-        System.out.println("Endereço IP do servidor:");        
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));){
+        System.out.println("IP do servidor:");        
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in, Charset.defaultCharset()));){
             return reader.readLine();
         } catch (IOException e) {
             return "127.0.0.1";

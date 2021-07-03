@@ -15,7 +15,7 @@ public class Peer implements AutoCloseable {
 
     private ServerSocket servidor;
     private String enderecoOuvinteRequisicoesTCP;
-    private final BufferedReader leitorInputTeclado;
+    private final Console leitorInputTeclado;
 
     private int porta;
     private boolean isCompartilhandoArquivos;
@@ -36,7 +36,7 @@ public class Peer implements AutoCloseable {
     
 
     public Peer() throws IOException {
-        this.leitorInputTeclado = new BufferedReader(new InputStreamReader(System.in));
+        this.leitorInputTeclado = System.console();
         this.isCompartilhandoArquivos = false;
         configurarPeer();
     }
@@ -62,6 +62,8 @@ public class Peer implements AutoCloseable {
 
         System.out.println("Digite o caminho absoluto da pasta em que deseja baixar arquivos e/ou compartilhar arquivos:");
         this.caminhoAbsolutoPastaCliente = leitorInputTeclado.readLine();
+
+        System.out.println(caminhoAbsolutoPastaCliente);
 
         this.enderecoOuvinteRequisicoesTCP = enderecoIp + ":" + porta;
 
@@ -185,7 +187,7 @@ public class Peer implements AutoCloseable {
             }
             
             return nomeArquivo;
-        } catch (IOException e1) {
+        } catch (IOError e1) {
             System.out.println("Ocorreu um erro durante a leitura, tente novamente!");
             return null;
         }        
@@ -672,7 +674,7 @@ public class Peer implements AutoCloseable {
             try {
                 String escolhaUsuario = leitorInputTeclado.readLine();
                 direcionarEscolhaUsuario(escolhaUsuario);
-            } catch (IOException e) {
+            } catch (IOError e) {
                 System.err.println("Erro na captura da opção, tente novamente");
             }
         }
@@ -682,7 +684,7 @@ public class Peer implements AutoCloseable {
         try (Peer peer = new Peer();) {            
             peer.rodarMenuIterativo();        
         } catch (IOException e) {
-            System.err.println("Ocorreu um erro durante a execuçaõ, inicie a execução novamente.");
+            System.err.println("Ocorreu um erro durante a execução, inicie a execução novamente.");
         }
     }
 
