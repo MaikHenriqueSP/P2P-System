@@ -496,8 +496,7 @@ public class Peer implements AutoCloseable {
                     socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
                     Mensagem update = new Mensagem("UPDATE");
                     update.adicionarMensagem("arquivo", arquivoAlvo);
-                    update.adicionarMensagem("endereco", enderecoOuvinteRequisicoesTCP);
-                    
+                    update.adicionarMensagem("endereco", enderecoOuvinteRequisicoesTCP);                    
                     Mensagem updateOk = controlarRecebimentoMensagemUDP(update, socketUDP);
                     if (updateOk == null) {
                         System.out.println("Não foi recebida resposta do servidor em relação a requisição UPDATE.");
