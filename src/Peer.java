@@ -488,19 +488,20 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Faz uma requisição UPDATE ao servidor se estiver atuando como compartilhador de arquivos,
-         * visando atualizar os arquivos que possuí e está disposto a compartilhar.
+         * Faz uma requisição UPDATE ao servidor se estiver atuando como compartilhador de arquivos, visando atualizar os arquivos que possuí e está disposto a compartilhar.
          */
         private void enviarRequisicaoUpdate() {
             if (isCompartilhandoArquivos) {
                 try (DatagramSocket socketUDP = new DatagramSocket()){
+                    socketUDP.setSoTimeout(Peer.TEMPO_ESPERA_RESPOSTA_UDP);
                     Mensagem update = new Mensagem("UPDATE");
                     update.adicionarMensagem("arquivo", arquivoAlvo);
                     update.adicionarMensagem("endereco", enderecoOuvinteRequisicoesTCP);
-                    Mensagem.enviarMensagemUDP(update, Servidor.ENDERECO_SERVIDOR, Servidor.PORTA_SOCKET_RECEPTOR, socketUDP);
                     
-                    Mensagem updateOk = Mensagem.receberMensagemUDP(socketUDP);
-                    
+                    Mensagem updateOk = controlarRecebimentoMensagemUDP(update, socketUDP);
+                    if (updateOk == null) {
+                        System.out.println("Não foi recebida resposta do servidor em relação a requisição UPDATE.");
+                    }                    
                 } catch (Exception e) {
                     System.err.println("Não foi possível enviar a requisição UPDATE ao servidor!");
                 }
