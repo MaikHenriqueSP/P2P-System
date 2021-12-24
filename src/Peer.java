@@ -6,8 +6,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Classe atua como distribuídora dos arquivos que possuí e também realiza downloads de arquivos
- * conforme requisições do usuário.
+ * Act as a downloader and uploader of the files that it allows to be shared.
  * 
  * @author Maik Henrique
  */
@@ -24,7 +23,7 @@ public class Peer implements AutoCloseable {
     private List<String> arquivosDisponiveis;
     
     /**
-     *  Define o tamanho padrão dos pacotes para transferência, sendo padronizados em 8 kbytes.
+     *  Sets the default package size for transfer, which is by default 8 Kb.
      */
     public static final int TAMANHO_PACOTES_TRANSFERENCIA = 1024 * 8;
 
@@ -49,8 +48,7 @@ public class Peer implements AutoCloseable {
     }    
 
     /**
-     * 
-     * @throws IOException caso a configuração do Peer não seja bem sucedida, lança uma exceção de modo que deve ser interrompida a criação do Peer.
+     * @throws IOException If the setup of the Peer fails, it throws and exception, stopping the Peer registration.
      */
     private void configurarPeer() throws IOException {
         System.out.println("Digite o IP:");
@@ -69,8 +67,8 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Efetua requisição JOIN ao servidor e caso receba JOIN_OK inicializa a thread para a atuação do Peer como um servidor de compartilhamento
-     * de arquivos.
+     * Sends the JOIN request to the server, if it receives a JOIN_OK back, then it will starts a thread to allow the Peer to act server that
+     * shares its files.
      */
     private void joinServidor() {
         Mensagem mensagemJoin = new Mensagem("JOIN");
@@ -97,13 +95,13 @@ public class Peer implements AutoCloseable {
         }
     }
 
-    /**
-     * Método para realização do item 5.g, em que se requere o envio contínuo de mensagens enquanto o servidor não responder.
-     * Faz 5 tentativas de comunicação com o servidor, enviando mensagens UDP em um intervalo de 1 segundo entre cada uma delas.
+    /**     
+     * Implements a polling logic aiming the server, by default it tries 5 times, sending UDP messages with an interval of 1 second
+     * between each message.
      * 
-     * @param mensagem mensgem que se deseja encaminhar.
-     * @param socketUDP socket com a configuração do destinatário.
-     * @return mensagem resposta do servidor ou nulo caso nenhuma resposta seja obtiva.
+     * @param mensagem message to be sent
+     * @param socketUDP socket with the destination details configure
+     * @return nulls if the contact with the server fails or the response received
      */
     public Mensagem controlarRecebimentoMensagemUDP(Mensagem mensagem, DatagramSocket socketUDP) {
         Mensagem respostaServidor = null;
@@ -123,7 +121,7 @@ public class Peer implements AutoCloseable {
     }
     
     /**
-     * Ouvinte de conexões TCP. Assim, quando uma conexão é estabelecida, delega uma nova thread para lidar com o compartilhamento de arquivos.
+     * TCP connection listener. If a connection is established, it delegates a new thread to deal with the file sharing.     
      */
     public class ServidorCompartilhamentOuvinte extends Thread {
         @Override
@@ -140,7 +138,7 @@ public class Peer implements AutoCloseable {
     }       
     
     /**
-     * Inicializa uma Thread e um ServerSocket, que terá a função de lidar com requisições DOWNLOAD vindas de outros Peers.
+     * Starts a thread and a ServerSocket instance, which is going to be responsible for handling DOWNLOAD request comming from other Peers.
      */
     private void iniciarServidorOuvinteDeCompartilhamento() {
         try {
@@ -154,7 +152,7 @@ public class Peer implements AutoCloseable {
     }
    
     /**
-     * Inicializa uma Thread responsável por executar uma requisição DOWNLOAD a outros Peers em busca de um arquivo alvo.
+     * Initializes a Thread responsible for executing a DOWNLOAD request to other Peers requesting the target file.
      */
     private void iniciarDownloader(String enderecoPeerPrioritario) {
         if (!enderecoPeerPrioritario.isEmpty()) {
@@ -189,14 +187,13 @@ public class Peer implements AutoCloseable {
         }        
     }
        
-    /**
-     * Orquestra a requisição SEARCH com o servidor, criando um socket UDP para o envio da mensagem e posteriormente
-     * esperando pela resposta do servidor pelo conjunto de Peers com o arquivo.
+    /**     
+     * Orchestrates the SEARCH request to the server, creating a UDP socket to send the message and the it waits for the server
+     * response for the list of Peers that owns the file.
+     * @TODO: Deal with edge cases, like when the server does not answer the request
      * 
-     * @TODO: Lida com edge cases, como quando o servidor não responde
-     * 
-     * @param arquivoAlvo
-     * @return conjunto de endereço dos Peers com o arquivo requerido ou nulo caso o servidor não responda.
+     * @param arquivoAlvo file that the Peer wants to download
+     * @return set of Peers addresses that owns the target file or an empty set if the server does not answer
      */
     private Set<String> getPeersComArquivo(String arquivoAlvo) {
         try (DatagramSocket socketUDP = new DatagramSocket()){
@@ -212,9 +209,8 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Constrói e retorna uma mensagem SEARCH que será usado para solicitar ao SERVIDOR o conjunto de Peers que possuem o arquivo alvo.
-     * @param arquivoAlvo nome do arquivo de vídeo que será requisitado ao servidor
-     * @param socketUDP instância de um socket UDP para envio da mensagem
+     * @param arquivoAlvo 
+     * @param socketUDP 
      */
     private Mensagem mensagemSearchPorPeers(String arquivoAlvo, DatagramSocket socketUDP) {
         Mensagem requisicaoPeers = new Mensagem("SEARCH");
@@ -224,10 +220,10 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * A partir de uma mensagem constrói e retorna o conjunto de peers com o arquivo alvo.
+     * Process the a message that contains the Peers list
      * 
      * @param mensagemPeersComOArquivo 
-     * @return Conjunto vazio ou não com os endereços dos Peers.
+     * @return Set of filtered adresses of Peers
      */
     private Set<String> getDadosPeer(Mensagem mensagemPeersComOArquivo) {
         Map<String, Object> mensagensArquivosPeer = mensagemPeersComOArquivo.getMensagens();
@@ -242,9 +238,9 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Classe representante da thread que atua como compartilhadora de arquivos para outros Peers, atuando de forma concorrente.
-     * Assim, cada requisição de DOWNLOAD é tratada por esta classe, desde o handshake de qual arquivo será disponibilizado até
-     * a execução da transferência de fato.
+     * Represents the thread that acts as a file sharer to other Peers, working concurrently.
+     * For each DOWNLOAD request, it performs a handshake on which is the file that is going to be sent and triggers the 
+     * transfer as well.
      */
     class ServidorArquivosThread extends Thread {
         private Socket socket;
@@ -252,7 +248,7 @@ public class Peer implements AutoCloseable {
         private InputStream inputStream;
 
         /**
-         * @param socket socket construído após o aceite de conexão pelo método ouvinte.
+         * @param socket Socket with the connection configured with another Peer
          * @throws IOException
          */
         public ServidorArquivosThread(Socket socket) throws IOException {
@@ -262,9 +258,8 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Controla o fluxo de execução da thread. Iniciando pela espera de uma mensagem TCP para fazer um 
-         * hand-shake de qual arquivo o cliente deseja, após o recebimento da mensagem, decide se nega o DOWNLOAD ou não 
-         * de forma aleatória, caso o download seja aceito, inicia a transferência.
+         * Handles the execution flow of the thread. It starts by waiting a TCP message and then performs a handshake of the file to
+         * be shared, after receiving the message, it randomly decides on sharing the file or not.
          */
         @Override
         public void run() {
@@ -289,7 +284,7 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Responsável por ler o arquivo em disco, e efetuar a transferência em pacotes de bytes via canal estabelecido.
+         * Reads the file on disk, transfering it in packets through the connection established.
          * 
          * @param caminhoArquivoRequisitado
          */
@@ -316,7 +311,7 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Thread responsável pelo recebimento e escrita em disco de um arquivo vindo de outro Peer.
+     * Receives the file from the other Peer and writes it on disk.
      */
     class ClienteArquivosThread extends Thread {
         private Socket socket;
@@ -339,9 +334,8 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Controla o fluxo de execução da thread.
-         * Para cada um dos Peers, faz uma requisição de DOWNLOAD, se aceito, da prosseguimento a transferência, senão, refaz a requisição
-         * a outro Peer em um intervalo de 5 segundos entre um Peer e outro.
+         * For each Peer, it performs a DOWNLOAD request, if accepted, it proceeds to the transfer, if not, performs the request to
+         * another Peer in a interval of 5 seconds.
          */
         @Override
         public void run() {
@@ -389,7 +383,7 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Estabelece conexão TCP com um Peer e instancia os streams necessários para a transferência de dados.        
+         * Establishes a TCP connection with another Peer and creates a stream for transfering the file.
          */
         private void estabelecerConexao(String enderecoPeer) {
             try {
@@ -405,7 +399,7 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Faz uma requisição TCP para o Peer cuja a conexão TCP foi estabelecida.
+         * Performs a DOWNLOAD request to another Peer.         
          */
         private void combinarArquivoParaDownload() {
             Mensagem arquivoRequerido = new Mensagem("DOWNLOAD");
@@ -414,10 +408,9 @@ public class Peer implements AutoCloseable {
         }
 
          /**
-          * Orquestra o DOWNLOAD do arquivo, primeiro checa se o download foi negado tentando converter o pacote recebido em uma instância
-          * de Mensagem e caso o download não tenha sido negado prossegue com o download.
+          * Orchestrates the file download.
           *
-          * @return se o download foi efetuado ou não.
+          * @return a boolean stating if the download was successful or not
           */
         private boolean downloadArquivo() {        
             boolean isTransferenciaBemSucedida = false;
@@ -440,11 +433,11 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Executa a transferência de fato, escrevendo o arquivo em disco.
+         * Executes the file transfer, writing it on disk.
          * 
-         * @param arquivoLeitor stream estabelecida com o Peer provedor do arquivo.
-         * @param data pacote de bytes inicial que foi utilizado decidir se o download foi negado ou não.
-         * @return true se o download foi bem sucedido e false caso contrário.
+         * @param arquivoLeitor stream established with the Peer
+         * @param data Initial data packet received
+         * @return true if the download was successful, false otherwise
          */
         private boolean receberTransferenciaArquivo(BufferedInputStream arquivoLeitor, byte[] data, int quantidadeBytesLido) {
             File file = new File(caminhoAbsolutoPastaCliente,  this.arquivoAlvo);
@@ -465,11 +458,10 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         *  Decide se o download foi negado, tenta converter o pacote recebido para uma instância de Mensagem e se mal sucedido já
-         * retorna falso.
+         *  Decides if the download request was reject or not
          * 
-         * @param data pacote de bytes recebido.
-         * @return true se o download foi negado e false caso contrário.
+         * @param data packet received from the other peer
+         * @return true if the download request was reject, false otherwise
          */
         private boolean isDownloadNegado(byte[] data) {
             if (data.length == 0) {
@@ -488,7 +480,7 @@ public class Peer implements AutoCloseable {
         }
 
         /**
-         * Faz uma requisição UPDATE ao servidor se estiver atuando como compartilhador de arquivos, visando atualizar os arquivos que possuí e está disposto a compartilhar.
+         * Performs an UPDATE request to the server in order to update the information that server holds about the file that the Peer has.
          */
         private void enviarRequisicaoUpdate() {
             if (isCompartilhandoArquivos) {
@@ -509,12 +501,11 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Implementação genérica do código necessário para fechar qualquer instância que implemente AutoCloseable,
-     * fazendo as validações necessárias.
+     * Generic implementation to close any AutoCloseable instance
      * 
      * @param <T>
      * @param closeableInstance
-     * @return true se a conexão foi fechada com sucesso e false caso contrário.
+     * @return true if the connection was successfully close, false otherwise
      */
     private static <T extends AutoCloseable> boolean  fecharConexao(T closeableInstance) {
         try {
@@ -553,7 +544,7 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Orquestra a requisição JOIN ao servidor.
+     * Orchestrates the JOIN request to the server.
      */
     private void tratarRequisicaoJoin() {
         if (!this.isCompartilhandoArquivos) {
@@ -566,8 +557,7 @@ public class Peer implements AutoCloseable {
     }
     
     /**
-     * Orquestra a requisição SEARCH, requisitando ao servidor o conjunto de Peers com o arquivo alvo,
-     * para então atualizar o conjunto a nível do Peer.
+     * Orchestrates the SEARCH request, asking the server the list of Peers that are available with the target file.
      */
     private void tratarRequisicaoSearch() {
         String arquivoAlvo = getNomeArquivoAlvo();        
@@ -588,7 +578,7 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Orquestra requisições DOWNLOAD, fazendo as validações necessárias.
+     * Orchestrates DOWNLOAD requests, performing the required validations.
      */
     private void tratarRequisicaoDownload() {        
         try {
@@ -610,8 +600,7 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Orquestra a requisição LEAVE, enviando a mensagem UDP ao servidor e desligando o compartilhamento caso
-     * bem sucedido.
+     * Orchestrates the LEAVE request, sending UDP messages to the server and turning off the file sharing mechanism.
      */
     private void tratarRequisicaoLeave() {
         if (!this.isCompartilhandoArquivos) {
@@ -641,8 +630,8 @@ public class Peer implements AutoCloseable {
     }
 
     /**
-     * Faz o direcionamento para os métodos adequados de acordo com a requisição do usuário.
-     * @param escolhaUsuario qual ação o usuário decidiu tomar.
+     * Redirects the user requests to the proper handlers.
+     * @param escolhaUsuario user input
      */
     private void direcionarEscolhaUsuario(String escolhaUsuario) {
         switch (escolhaUsuario) {

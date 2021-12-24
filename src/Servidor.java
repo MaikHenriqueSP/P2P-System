@@ -6,8 +6,7 @@ import java.util.stream.Collectors;
 import java.nio.charset.Charset;
 
 /**
- * Classe responsável por coordenar o compartilhamento de arquivos entre Peers
- * 
+ * Coordinates the file sharing among Peers.
  * @author Maik Henrique
  */
 public class Servidor implements AutoCloseable {
@@ -28,9 +27,8 @@ public class Servidor implements AutoCloseable {
     }
 
     /**
-     * Método usado como um listener do servidor, ou seja, em estado block aguardando o recebimento de mensagens via UDP.
-     * Assim a cada mensagem recebida inicializa-se uma thread (RequisicaoClienteThread) que será responsável por lidar com a requisição,
-     * possibilitando assim que o servidor lide com várias requisições de forma simultânea.
+     * Server listener, which means it remains blocked waiting on UDP messages.
+     * On every message received it starts a thread responsible for dealing with the request, allowing the server to handle multiple requests.
      * 
      * @throws IOException
      * @throws ClassNotFoundException
@@ -50,9 +48,8 @@ public class Servidor implements AutoCloseable {
     }
 
     /**
-     * Classe de suporte, usada para atuar como uma thread lidando com requições do cliente.
-     * Assim possui o pacote recebido via UDP e faz modificações concorrentes no estado do servidor,
-     * adicionando, removendo e atualizando os peers e arquivos disponíveis.
+     * Handles client requests, handling the UDP packet received and perform concurrent modifications on the server state,
+     * adding, removing and updating the Peers information.
      */
     class RequisicaoClienteThread extends Thread {
         private DatagramPacket pacoteRecebido;
@@ -68,9 +65,9 @@ public class Servidor implements AutoCloseable {
         }
 
         /**
-         * Trata a requisição do cliente e fazendo os redirecionamentos aos métodos adequados.
+         * Treats the client request, performing the redirecting to the proper method handler.
          * 
-         * @param mensagem mensagem de requisição recebida do cliente
+         * @param mensagem message received from the client
          */
         public void tratarRequisicao(Mensagem mensagem) {
             String requisicao = mensagem.getTitulo();   
@@ -96,9 +93,9 @@ public class Servidor implements AutoCloseable {
         }
 
         /**
-         *  Lida com requisições JOIN, adicionando aos mapas peer -> arquivos e arquivo -> peers.
+         * Deals with JOIN requests, adding maps peer -> files and files -> peer
          * 
-         * @param mensagem mensagem recebida na requisição JOIN
+         * @param mensagem message received from the JOIN request
          */
         private void adicionarPeer(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();
@@ -118,9 +115,9 @@ public class Servidor implements AutoCloseable {
         }
 
         /**
-         * Lida com requisições SEARCH, encontrando a lista de peers que possuem o arquivo e os envia para o cliente
+         * Handles JOIN requests, finding the list of Peers that own the files and sends it to the client
          * 
-         * @param mensagem mensagem recebida na requisição JOIN
+         * @param mensagem message received on the JOIN request
          */
         private void procurarArquivo(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();
@@ -141,10 +138,9 @@ public class Servidor implements AutoCloseable {
         }
 
         /**
-         *  Lida com requisições do tipo LEAVE, removendo o mapeamento do peer para seus arquivos e
-         * dos arquivos do peer para seu endereço (mapeamento bi-direcional).
+         * Handles the LEAVE request, removing the mapping from the Peer and of the Files.
          * 
-         * @param mensagem mensagem recebida do pear que deseja se desligar da rede
+         * @param mensagem message received from the Peer that wants to leave the system
          */
         private void removerPeer(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();
@@ -179,10 +175,9 @@ public class Servidor implements AutoCloseable {
         }
 
         /**
-         * Lida com requisições UPDATE, que ocorrem após um Peer finalizar o download de arquivo e tornando-se assim
-         * também um compartilhador do arquivo para outros peers.
+         * Handles UPDATE requests, which performs modifications to the files list that the Peer owns.
          * 
-         * @param mensagem mensagem recebida na requisição UPDATE
+         * @param mensagem message received from the Peer
          */
         private void atualizarPeer(Mensagem mensagem) {
             Map<String, Object> mensagens = mensagem.getMensagens();

@@ -15,8 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Responsável pelo template de mensagens, sendo composto pelo título e um conjunto de mapeamentos chave-valor 
- * como corpo da mensagem em si.
+ * Defines a template for the message, with title and a body formed by a set of messages mapped in key-value fashion.
  * 
  * @author Maik Henrique
  */
@@ -33,15 +32,15 @@ public class Mensagem implements Serializable {
     }
 
     /**
-     * Responsavél pela inserção de um mapeamento chave-valor ao corpo da mensagem.
+     * Adds a body value to the message
      * 
-     * @param titulo título da mensagem.
-     * @param corpoMensagem item do corpo da mensagem.
+     * @param titulo title of the message
+     * @param corpoMensagem message body
      */
     public void adicionarMensagem(String titulo, Object corpoMensagem) {
         mensagens.put(titulo, corpoMensagem);
-    }
-    
+    }  
+ 
     public String getTitulo() {
         return titulo;
     }
@@ -51,10 +50,10 @@ public class Mensagem implements Serializable {
     }
 
     /**
-     * Utilitário para recebimento de mensagens TCP.
+     * Receives TCP messages
      * 
-     * @param inputStream stream de input da conexão TCP entre as partes.
-     * @return mensagem recebida
+     * @param inputStream inputStream of the TCP connection of the pair
+     * @return received message
      */
     public static Mensagem receberMensagemTCP(InputStream inputStream) {
         try {
@@ -67,10 +66,10 @@ public class Mensagem implements Serializable {
     }
 
     /**
-     * Utilitário para envios de de mensagens TCP.
+     * Sends TCP messages
      * 
-     * @param outputStream stream escrita da conexão TCP
-     * @param mensagem mensagem a ser enviada para o outro extremo da conexão
+     * @param outputStream stream of the TCP connection in which the message should be written
+     * @param mensagem message to be sent
      */
     public static void enviarMensagemTCP(OutputStream outputStream, Mensagem mensagem) {
         try {
@@ -83,15 +82,15 @@ public class Mensagem implements Serializable {
     }
 
     /**
-     * Utilitário para o envio de mensagens UDP.
+     * Sends UDP messages
      * 
-     * @param mensagem mensagem a ser enviada ao destinatário.
-     * @param endereco endereço IP do destinatário @TODO arrumar a questão do localhost usando InetAddress.
-     * @param porta porta do destinatário.
-     * @param socketUDP socket UDP utilitário para o envio.
+     * @param mensagem message to be sent
+     * @param endereco IP address of the destination
+     * @param porta port of the destination
+     * @param socketUDP configured UDP socket
      */
     public static void enviarMensagemUDP(Mensagem mensagem, String endereco, int porta, DatagramSocket socketUDP) {
-        InetAddress enderecoDestinatarioInet;
+        InetAddress enderecoDestinatarioInet;        
         try {
             enderecoDestinatarioInet = InetAddress.getByName(endereco);
             ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
@@ -109,7 +108,7 @@ public class Mensagem implements Serializable {
     }
 
     /**
-     * Utilitário para recebimento de mensagens UDP.
+     * Receives UDP messages within size at most of 
      * 
      * @param socketUDP socket UDP utilitário para o recebimento de mensagem.
      * @return devolve uma instância construída da mensagem recebida.
